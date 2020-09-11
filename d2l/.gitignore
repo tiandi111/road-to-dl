@@ -1,5 +1,6 @@
 venv
 .idea
-*pychache
+*pycache
 *.pkl
 *visual
+*.DS_Store
