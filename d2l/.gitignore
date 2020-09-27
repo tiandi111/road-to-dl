@@ -4,3 +4,4 @@ venv
 *.pkl
 *visual
 *.DS_Store
+*.onnx
