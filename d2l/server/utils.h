@@ -25,7 +25,7 @@ using namespace std;
 //    return outDims;
 //}
 
-dnnl::memory::dims& ComputeConvOutputDims(
+dnnl::memory::dims ComputeConvOutputDims(
         int n,
         int h, int w,
         int hk, int wk,

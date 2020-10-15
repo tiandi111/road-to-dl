@@ -12,6 +12,6 @@ ictx::InputContext::InputContext(unordered_map<string, ten::Tensor>& inputs) {
     this->inputs = inputs;
 }
 
-const unordered_map<string, ten::Tensor>& ictx::InputContext::Inputs() {
+unordered_map<string, ten::Tensor>& ictx::InputContext::Inputs() {
     return this->inputs;
 }

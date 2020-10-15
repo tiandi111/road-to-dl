@@ -15,23 +15,29 @@
 using namespace std;
 
 namespace load {
-    grp::Graph* LoadOnnx(istream *is);
+    grp::Graph LoadOnnx(istream *is);
     node::OpType OnnxType2OpType(string t);
     ten::DataType OnnxDataType2TenDataType(int odtype);
     map<string, vector<int>> ParseInputInfos(onnx::ModelProto oModel);
     map<string, vector<int>> ParseOutputInfos(onnx::ModelProto oModel);
-    node::Node* ParseNode(
-            onnx::NodeProto oNode,
+    std::shared_ptr<node::Node> ParseNode(
+            onnx::NodeProto& oNode,
             int id,
             const vector<string>& inputs,
             const vector<string>& outputs,
-            grp::Graph* g);
-    node::ConvNode* ParseConvNode(
-            onnx::NodeProto oNode,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::ConvNode> ParseConvNode(
+            onnx::NodeProto& oNode,
             int id,
             const vector<string>& inputs,
             const vector<string>& outputs,
-            grp::Graph* g);
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::BatchNormNode> ParseBnNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
     unordered_map<string, ten::Tensor> ReadWeights(onnx::GraphProto oGraph);
 }
 

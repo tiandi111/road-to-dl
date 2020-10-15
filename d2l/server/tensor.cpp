@@ -3,23 +3,25 @@
 //
 
 #include "tensor.h"
+#include <string>
+#include <stdexcept>
 
 ten::Tensor::Tensor() {}
 ten::Tensor::~Tensor(){}
-ten::Tensor::Tensor(vector<int> dims, DataType t, void* ptr) {
+ten::Tensor::Tensor(vector<int> dims, DataType t, vector<char> data) {
     this->dims = dims;
     this->dtype = t;
-    this->ptr = ptr;
+    this->data = data;
 }
 
-void* ten::Tensor::Data() const {
-    return this->ptr;
+const vector<char>& ten::Tensor::Data() const {
+    return this->data;
 }
 
-ten::DataType ten::Tensor::Type() const {
+const ten::DataType ten::Tensor::Type() const {
     return this->dtype;
 }
 
-vector<int> ten::Tensor::Dims() const {
+const vector<int>& ten::Tensor::Dims() const {
     return this->dims;
 }

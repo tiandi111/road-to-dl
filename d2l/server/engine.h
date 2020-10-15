@@ -10,6 +10,7 @@
 #include "input_context.h"
 #include <string>
 #include <vector>
+#include <iostream>
 
 using namespace std;
 using tag = dnnl::memory::format_tag;
@@ -29,7 +30,7 @@ namespace eng {
     public:
         Engine();
         Engine(string name, DeviceType t);
-        ~Engine();
+        virtual ~Engine() = default;
 //        Execute(ictx::InputContext ctx, grp::Graph g);
     };
 
@@ -39,28 +40,29 @@ namespace eng {
         dnnl::engine eng;
     public:
         MKLEngine(string name, DeviceType t);
-        ~MKLEngine();
-        void Execute(ictx::InputContext ctx, grp::Graph* g);
+        virtual ~MKLEngine() = default;
+        void Execute(ictx::InputContext& ctx, grp::Graph& g);
     };
 
     class MKLExecutionContext {
     private:
-        dnnl::stream stream;
-        dnnl::engine eng;
+        dnnl::stream& stream;
+        dnnl::engine& eng;
         vector<dnnl::primitive> prims;
         vector<unordered_map<int, dnnl::memory>> args;
         unordered_map<string, dnnl::memory>& inputs;
-        grp::Graph* g;
+        grp::Graph& g;
     public:
         MKLExecutionContext(
-                dnnl::stream stream,
-                dnnl::engine eng,
+                dnnl::stream& stream,
+                dnnl::engine& eng,
                 unordered_map<string, dnnl::memory>& inputs,
-                grp::Graph* g);
+                grp::Graph& g);
         void Execute();
     private:
-        void InitNode(const node::Node& n);
-        void InitConvNode(const node::ConvNode& n);
+        void InitNode(std::shared_ptr<node::Node> n);
+        void InitConvNode(std::shared_ptr<node::ConvNode> n);
+        void InitBnNode(std::shared_ptr<node::BatchNormNode> n);
     };
 
 }

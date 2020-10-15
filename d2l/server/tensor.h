@@ -21,14 +21,16 @@ namespace ten {
     private:
         vector<int> dims;
         DataType dtype;
-        void* ptr;
+        vector<char> data;
     public:
         Tensor();
         ~Tensor();
-        Tensor(vector<int> dims, DataType t, void* ptr);
-        void* Data() const;
-        DataType Type() const;
-        vector<int>& Dims() const;
+        Tensor(vector<int> dims, DataType t, vector<char> data);
+        const vector<char>& Data() const;
+        const DataType Type() const;
+        const vector<int>& Dims() const;
+        // todo: finish this element wise multiplcation
+//        void Multiply(Tensor& A, vector<int>& Axes, bool InPlace);
     };
 }
 

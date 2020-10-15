@@ -5,8 +5,11 @@ import onnx
 import onnxruntime
 
 if __name__ == '__main__':
-    input = torch.zeros((1, 1, 32, 32))
-    model = nn.Conv2d(1, 6, (3, 3), 1, 2)
+    input = torch.zeros((1, 1, 4, 4))
+    model = nn.Sequential(
+        nn.Conv2d(1, 2, (3, 3), 1, 1),
+        nn.BatchNorm2d(2),
+    )
     torch.onnx.export(model, input, "test_conv.onnx", verbose=True)
     model = onnx.load("test_conv.onnx")
     onnx.checker.check_model(model)

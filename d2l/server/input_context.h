@@ -19,7 +19,7 @@ namespace ictx {
         InputContext();
         InputContext(unordered_map<string, ten::Tensor>& inputs);
         ~InputContext();
-        const unordered_map<string, ten::Tensor>& Inputs();
+        unordered_map<string, ten::Tensor>& Inputs();
     };
 }
 

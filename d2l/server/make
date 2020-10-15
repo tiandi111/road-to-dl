@@ -1,1 +1,0 @@
- g++ graph.cpp input_context.cpp engine.cpp node.cpp tensor.cpp onnx.pb.cc -lprotobuf -ldnnl -std=c++11 && ./a.out

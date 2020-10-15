@@ -5,59 +5,18 @@
 //#include <vector>
 #include <iostream>
 #include <map>
-//#include "graph.h"
+#include <vector>
 using namespace std;
 
-class A {
-private:
-    map<int, int> m;
-public:
-    A();
-    map<int, int>& ReturnMap();
-    void Print();
-};
-
-A::A() {}
-
-map<int, int>& A::ReturnMap() {
-    return this->m;
-}
-
-void ModifyMap(map<int, int> m);
-
-void ModifyMap(map<int, int> m) {
-    m.insert(std::pair<int,int>(1,100));
-}
-
-void A::Print() {
-    cout<< this->m.size() <<endl;
-    for (map<int, int>::const_iterator iter = this->m.begin(); iter != this->m.end(); iter++) {
-        cout<< iter->first << iter->second <<endl;
-    }
-}
-
-class B {
-private:
-    map<int, int> m;
-public:
-    B();
-    map<int, int>& ReturnMap();
-};
-
-map<int, int>& B::ReturnMap() {
-    return this->m;
-}
-
-
 int main() {
-    A a = A();
-    map<int, int>& amap = a.ReturnMap();
-//    amap.insert(std::pair<int,int>(1,100));
-    ModifyMap(amap);
-//    a.Print();
-    for (map<int, int>::const_iterator iter = amap.begin(); iter != amap.end(); iter++) {
-        cout<< iter->first << iter->second <<endl;
+    float x[10];
+    float y[10];
+    float z[10];
+    float *px = x;
+    float *py = y;
+    for(int i=0; i<10; i++) {
+        cout<< px[i] * py[i] <<endl;
+        cout<< px[i] <<endl;
+        cout<< py[i] <<endl;
     }
-//    a.Print();
 }
-

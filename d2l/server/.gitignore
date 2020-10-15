@@ -1,2 +1,7 @@
 cmake-build-debug
 *.out
+test_conv.onnx
+test_model.py
+test
+test.cpp
+onnx.proto

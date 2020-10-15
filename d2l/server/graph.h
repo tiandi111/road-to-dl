@@ -11,6 +11,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <memory>
 
 //namespace node {
 //    class Node;
@@ -22,22 +23,22 @@ namespace grp {
 
     class Graph {
     private:
-        node::Node * root;
-        vector<node::Node> nodes; // in topo-sort order
+        vector<std::shared_ptr<node::Node>> nodes; // in topo-sort order
         map<string, vector<int>> inputDims;
         map<string, vector<int>> outputDims;
         unordered_map<string, ten::Tensor> weights;
+        unordered_map<string, vector<std::shared_ptr<node::Node>>> inputDepens;
     public:
         Graph();
         Graph(map<string, vector<int>> inDims, map<string, vector<int>> outDims, unordered_map<string, ten::Tensor> w);
-        ~Graph();
-        void SetRoot(node::Node* root);
-        void AddNode(node::Node node);
-        vector<node::Node> GetNodes();
-        const unordered_map<string, ten::Tensor> GetWeights();
-        void Forward();
+        ~Graph() = default;
+        void AddNode(std::shared_ptr<node::Node> node);
+        const vector<std::shared_ptr<node::Node>>& GetNodes() const;
+        const unordered_map<string, ten::Tensor>& GetWeights() const;
+        unordered_map<string, ten::Tensor>& GetMutableWeights();
+        const void * GetWeightHandle(string name) const;
+        void Fuse();
     };
-
 }
 
 #endif //SERVER_GRAPH_H

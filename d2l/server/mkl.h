@@ -7,6 +7,7 @@
 
 #include "dnnl.hpp"
 #include <vector>
+#include <stdexcept>
 
 using namespace std;
 using namespace dnnl;
@@ -24,6 +25,83 @@ namespace mkl {
             const vector<int>& dstDims,
             const vector<int>& strides,
             const vector<int>& padding);
+
+    inline void ReadFromDnnlMemory(const void *handle, const dnnl::memory &mem) {
+        dnnl::engine eng = mem.get_engine();
+        size_t bytes = mem.get_desc().get_size();
+
+        if (eng.get_kind() == dnnl::engine::kind::cpu) {
+            uint8_t *src = static_cast<uint8_t *>(mem.get_data_handle());
+            for (size_t i = 0; i < bytes; ++i)
+                ((uint8_t *)handle)[i] = src[i];
+        }
+#if DNNL_GPU_RUNTIME == DNNL_RUNTIME_OCL
+        else if (eng.get_kind() == dnnl::engine::kind::gpu) {
+        dnnl::stream s(eng);
+        cl_command_queue q = s.get_ocl_command_queue();
+        cl_mem m = mem.get_ocl_mem_object();
+
+        cl_int ret = clEnqueueReadBuffer(
+                q, m, CL_TRUE, 0, bytes, handle, 0, NULL, NULL);
+        if (ret != CL_SUCCESS)
+            throw std::runtime_error("clEnqueueReadBuffer failed.");
+    }
+#endif
+    }
+
+    inline void WriteToDnnlMemory(const void *handle, dnnl::memory &mem) {
+        dnnl::engine eng = mem.get_engine();
+        size_t bytes = mem.get_desc().get_size();
+
+        if (eng.get_kind() == dnnl::engine::kind::cpu) {
+            uint8_t *dst = static_cast<uint8_t *>(mem.get_data_handle());
+            for (size_t i = 0; i < bytes; ++i)
+                dst[i] = ((uint8_t *)handle)[i];
+        }
+#if DNNL_GPU_RUNTIME == DNNL_RUNTIME_OCL
+        else if (eng.get_kind() == dnnl::engine::kind::gpu) {
+        dnnl::stream s(eng);
+        cl_command_queue q = s.get_ocl_command_queue();
+        cl_mem m = mem.get_ocl_mem_object();
+        size_t bytes = mem.get_desc().get_size();
+
+        cl_int ret = clEnqueueWriteBuffer(
+                q, m, CL_TRUE, 0, bytes, handle, 0, NULL, NULL);
+        if (ret != CL_SUCCESS)
+            throw std::runtime_error("clEnqueueWriteBuffer failed.");
+    }
+#endif
+    }
+
+    inline void WriteToDnnlMemoryFromTo(const void *handle, dnnl::memory &mem, size_t srcFrom, size_t dstFrom, size_t len) {
+        size_t bytes = mem.get_desc().get_size();
+        if(srcFrom<0 || dstFrom<0 || (dstFrom+len) > bytes) {
+            throw invalid_argument("srcFrom:" + to_string(srcFrom) +
+                                        " dstFrom:" + to_string(dstFrom) +
+                                        " len:" + to_string(len) +
+                                        " dnnl mem size:" + to_string(bytes));
+        }
+        dnnl::engine eng = mem.get_engine();
+
+        if (eng.get_kind() == dnnl::engine::kind::cpu) {
+            uint8_t *dst = static_cast<uint8_t *>(mem.get_data_handle());
+            for (size_t i = 0; i < len; ++i)
+                dst[dstFrom+i] = ((uint8_t *)handle)[srcFrom+i];
+        }
+#if DNNL_GPU_RUNTIME == DNNL_RUNTIME_OCL
+        else if (eng.get_kind() == dnnl::engine::kind::gpu) {
+        dnnl::stream s(eng);
+        cl_command_queue q = s.get_ocl_command_queue();
+        cl_mem m = mem.get_ocl_mem_object();
+        size_t bytes = mem.get_desc().get_size();
+
+        cl_int ret = clEnqueueWriteBuffer(
+                q, m, CL_TRUE, 0, bytes, handle, 0, NULL, NULL);
+        if (ret != CL_SUCCESS)
+            throw std::runtime_error("clEnqueueWriteBuffer failed.");
+    }
+#endif
+    }
 
 }
 
