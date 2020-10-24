@@ -24,7 +24,32 @@ def onnx_routine(model_path:str, data_path:str):
     print(train_label[0])
 
 if __name__ == '__main__':
-    onnx_routine("lenet.onnx", "/Users/tiandi03/Desktop/dataset")
+    # onnx_routine("lenet.onnx", "/Users/tiandi03/Desktop/dataset")
+
+    node = onnx.helper.make_node(
+        'Gather',
+        inputs=['data', 'indices'],
+        outputs=['y'],
+        axis=0,
+    )
+    data = np.random.randn(7, 6, 5, 4).astype(np.float32)
+    indices = np.array([
+        [
+            [5],
+            [1],
+        ],
+        [
+            [1],
+            [1],
+        ],
+        [
+            [1],
+            [1],
+        ]
+    ])
+    y = np.take(data, indices, axis=1)
+
+    print(y.shape)
 
 # if __name__ == '__main__':
 #     net = leNet.LeNet()

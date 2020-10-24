@@ -4,7 +4,6 @@
 
 #include "engine.h"
 #include "mkl.h"
-#include "utils.h"
 #include <memory>
 #include <stdexcept>
 
@@ -48,20 +47,13 @@ eng::MKLExecutionContext::MKLExecutionContext(
 
 void eng::MKLExecutionContext::Execute() {
     auto& nodes = this->g.GetNodes();
-    auto& prims = this->prims;
-    auto& args = this->args;
     for(const auto & node : nodes) {
         InitNode(node);
     }
-    for(int i=0; i<this->prims.size(); i++) {
-        prims[i].execute(this->stream, args[i]);
+    for(auto & x : this->execNodes) {
+        x->Execute();
     }
     this->stream.wait();
-    float out[32];
-    mkl::ReadFromDnnlMemory(out, this->args[0][17]);
-    for(float o : out) {
-        cout<< o <<endl;
-    }
 }
 
 void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
@@ -74,6 +66,11 @@ void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
         case node::OpType::bn : {
             std::shared_ptr<node::BatchNormNode> node = std::dynamic_pointer_cast<node::BatchNormNode>(n);
             InitBnNode(node);
+            break;
+        }
+        case node::OpType::shape : {
+            std::shared_ptr<node::ShapeNode> node = std::dynamic_pointer_cast<node::ShapeNode>(n);
+            InitShapeNode(node);
             break;
         }
         default:
@@ -107,7 +104,6 @@ void eng::MKLExecutionContext::InitConvNode(std::shared_ptr<node::ConvNode> node
             node->Pads()[0], node->Pads()[1], node->Pads()[2], node->Pads()[3], node->Strides()[0], node->Strides()[1],
             node->WeightDims()[0]);
     auto dstMemory = dnnl::memory({dstDims, dt::f32, tag::nchw}, this->eng); // todo: data type
-    inputs.insert({node->Outputs()[0], dstMemory});
     // todo: if bias not exist?
     vector<int> vDstDims(dstDims.begin(), dstDims.end());
 
@@ -164,13 +160,14 @@ void eng::MKLExecutionContext::InitConvNode(std::shared_ptr<node::ConvNode> node
         convDstMem = memory(conv_pd.dst_desc(), this->eng);
     }
 
-    this->prims.push_back(prim);
-    this->args.push_back({
-             {DNNL_ARG_SRC, convSrcMem},
-             {DNNL_ARG_WEIGHTS, convWeightsMem},
-             {DNNL_ARG_BIAS, bMemory},
-             {DNNL_ARG_DST, convDstMem}
-     });
+    inputs.insert({node->Outputs()[0], convDstMem});
+    unordered_map<int, dnnl::memory> args = {
+            {DNNL_ARG_SRC, convSrcMem},
+            {DNNL_ARG_WEIGHTS, convWeightsMem},
+            {DNNL_ARG_BIAS, bMemory},
+            {DNNL_ARG_DST, convDstMem}
+    };
+    this->execNodes.push_back(std::make_shared<ExecConvNode>(ExecConvNode(this->stream, prim, args)));
 }
 
 void eng::MKLExecutionContext::InitBnNode(std::shared_ptr<node::BatchNormNode> node) {
@@ -207,12 +204,95 @@ void eng::MKLExecutionContext::InitBnNode(std::shared_ptr<node::BatchNormNode> n
     mkl::WriteToDnnlMemory(graph->GetWeightHandle(node->VarName()), varianceMem);
     // Create the primitive.
     auto prim = batch_normalization_forward(bnormPD);
-    this->prims.push_back(prim);
-    this->args.push_back({
+    // todo under some cases, we can not do in-place bn, so uncomment below line
+    //    inputs.insert({node->Outputs()[0], dstMem});
+    //      e.g, in -> BN ->+-> out
+    //            |          |
+    //            |          |
+    //            ·----------·
+    unordered_map<int, dnnl::memory> args = {
             {DNNL_ARG_SRC, srcMem},
             {DNNL_ARG_MEAN, meanMem},
             {DNNL_ARG_VARIANCE, varianceMem},
             {DNNL_ARG_SCALE_SHIFT, scaleShiftMem},
             {DNNL_ARG_DST, srcMem}
-     });
+    };
+    this->execNodes.push_back(std::make_shared<ExecBNNode>(ExecBNNode(this->stream, prim, args)));
+}
+
+void eng::MKLExecutionContext::InitShapeNode(std::shared_ptr<node::ShapeNode> node) {
+    auto srcMemoryPair = inputs.find(node->InputName());
+    if(srcMemoryPair == inputs.end()) {
+        throw std::runtime_error("source " + node->InputName() + " not found");
+    }
+    auto srcMemory = srcMemoryPair->second;
+    int x = srcMemory.get_desc().dims().size();
+    auto dstMemory = dnnl::memory({{x}, dt::s32, tag::a}, this->eng);
+    inputs.insert({node->OutputName(), dstMemory});
+    this->execNodes.push_back(std::make_shared<ShapeNode>(ShapeNode(srcMemory, dstMemory)));
+}
+
+void eng::MKLExecutionContext::InitGatherNode(std::shared_ptr<node::GatherNode> node) {
+    auto execNode = GatherNode(node->Axis(),
+            this->GetInput(node->DataName()),
+            g.GetWeightTensor(node->IndicesName()),
+            eng);
+    inputs.insert({node->OutputName(), execNode.GetDstMemory()});
+    this->execNodes.push_back(std::make_shared<GatherNode>(execNode));
+}
+
+eng::GatherNode::GatherNode(int axis,
+           dnnl::memory& data,
+           const ten::Tensor& indices,
+           dnnl::engine& eng) : axis(axis), data(data), indices(indices) {
+    auto srcDims = data.get_desc().dims();
+    auto gDims = gatherDims(srcDims, indices.Dims(), axis);
+    tag t;
+    switch (gDims.size()) {
+        case 1 :
+            t = tag::a;
+            break;
+        case 2 :
+            t = tag::ab;
+            break;
+        case 3 :
+            t = tag::abc;
+            break;
+        case 4 :
+            t = tag::abcd;
+            break;
+        case 5 :
+            t = tag::abcde;
+            break;
+        case 6 :
+            t = tag::abcdef;
+            break;
+        default:
+            throw std::runtime_error("data dimension higher than 6 is not supported now");
+    }
+    this->dst = dnnl::memory({gDims, data.get_desc().data_type(), t}, eng);
+}
+
+void eng::GatherNode::Execute() {
+    auto dtype = data.get_desc().data_type();
+    switch (dtype) {
+        case dt::s32 : {
+            gather((int32_t *)data.get_data_handle(),
+                   (int32_t*)dst.get_data_handle(),
+                   (int64_t*)(indices.Data().data()),
+                   data.get_desc().dims(),
+                   indices.Dims(),
+                   axis);
+        }
+        case dt::f32 : {
+            gather((float*)data.get_data_handle(),
+                   (float*)dst.get_data_handle(),
+                   (int64_t*)(indices.Data().data()),
+                   data.get_desc().dims(),
+                   indices.Dims(),
+                   axis);
+        }
+        default:
+            throw std::invalid_argument("data type not supported: " + to_string(static_cast<int>(dtype)));
+    }
 }

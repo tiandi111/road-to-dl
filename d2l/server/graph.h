@@ -27,7 +27,7 @@ namespace grp {
         map<string, vector<int>> inputDims;
         map<string, vector<int>> outputDims;
         unordered_map<string, ten::Tensor> weights;
-        unordered_map<string, vector<std::shared_ptr<node::Node>>> inputDepens;
+        unordered_map<string, vector<std::shared_ptr<node::Node>>> inputDepends;
     public:
         Graph();
         Graph(map<string, vector<int>> inDims, map<string, vector<int>> outDims, unordered_map<string, ten::Tensor> w);
@@ -37,6 +37,7 @@ namespace grp {
         const unordered_map<string, ten::Tensor>& GetWeights() const;
         unordered_map<string, ten::Tensor>& GetMutableWeights();
         const void * GetWeightHandle(string name) const;
+        const ten::Tensor& GetWeightTensor(string name) const;
         void Fuse();
     };
 }

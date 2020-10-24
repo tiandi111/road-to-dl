@@ -3,7 +3,6 @@
 //
 
 #include "loader.h"
-#include "engine.h"
 #include "input_context.h"
 #include <fstream>
 #include <stdexcept>
@@ -46,6 +45,12 @@ node::OpType load::OnnxType2OpType(string t) {
     if(t == "Relu") {
         return node::relu;
     }
+    if(t == "Shape") {
+        return node::shape;
+    }
+    if(t == "Gather") {
+        return node::gather;
+    }
     return node::conv;
 }
 
@@ -72,6 +77,12 @@ std::shared_ptr<node::Node> load::ParseNode(
     }
     if(oNode.op_type() == "BatchNormalization") {
         return ParseBnNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Shape") {
+        return ParseShapeNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Gather") {
+        return ParseGatherNode(oNode, id, inputs, outputs, gptr);
     }
     node::Node node = node::Node(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr);
     return std::make_shared<node::Node>(node);
@@ -122,7 +133,7 @@ std::shared_ptr<node::ConvNode> load::ParseConvNode(
             if(got == gptr->GetWeights().end()) {
                 throw "conv layer bias not found, the model may have been broken";
             }
-            biasDims = got->second.Dims();
+            biasDims.assign(got->second.Dims().begin(), got->second.Dims().end());
             biasName = name;
         } else {
             srcName = name;
@@ -205,11 +216,38 @@ std::shared_ptr<node::BatchNormNode> load::ParseBnNode(
     return std::make_shared<node::BatchNormNode>(node);
 }
 
+std::shared_ptr<node::ShapeNode> load::ParseShapeNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    return std::make_shared<node::ShapeNode>(
+            node::ShapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+}
+
+std::shared_ptr<node::GatherNode> load::ParseGatherNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    int axis;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "axis") {
+            axis = attr.i();
+        }
+    }
+    return std::make_shared<node::GatherNode>(
+            node::GatherNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+}
+
 unordered_map<string, ten::Tensor> load::ReadWeights(onnx::GraphProto oGraph) {
     unordered_map<string, ten::Tensor> weights;
     for(int i=0; i<oGraph.initializer_size(); i++) {
         auto initial = oGraph.initializer(i);
-        vector<int> dims(initial.dims().begin(), initial.dims().end());
+        vector<int64_t> dims(initial.dims().begin(), initial.dims().end());
         vector<char> data(initial.raw_data().begin(), initial.raw_data().end());
         weights[initial.name()] = ten::Tensor(
                 dims,
@@ -247,21 +285,21 @@ grp::Graph load::LoadOnnx(istream *is) {
 
 int main() {
 //    ifstream in("/Users/tiandi03/road-to-dl/d2l/lenet.onnx", ios_base::binary);
-    ifstream in("/Users/tiandi03/road-to-dl/d2l/server/test_conv.onnx", ios_base::binary);
+    ifstream in("/Users/tiandi03/road-to-dl/d2l/lenet.onnx", ios_base::binary);
     auto g = load::LoadOnnx(&in);
     const vector<std::shared_ptr<node::Node>>& nodes = g.GetNodes();
     for(const auto & node : nodes) {
         cout<< node->Type() <<endl;
     }
-    g.Fuse();
-    eng::MKLEngine mklEngine("cpu", eng::DeviceType::cpu);
-    unordered_map<string, ten::Tensor> inputs;
-    std::vector<char> randomImageData(64);
-    std::generate(randomImageData.begin(), randomImageData.end(), []() {
-        return '0';
-    });
-    ten::Tensor image({1, 1, 4, 4}, ten::DataType::f32, randomImageData);
-    inputs.insert({"input.1", image});
-    ictx::InputContext inCtx(inputs);
-    mklEngine.Execute(inCtx, g);
+//    g.Fuse();
+//    eng::MKLEngine mklEngine("cpu", eng::DeviceType::cpu);
+//    unordered_map<string, ten::Tensor> inputs;
+//    std::vector<char> randomImageData(64);
+//    std::generate(randomImageData.begin(), randomImageData.end(), []() {
+//        return '0';
+//    });
+//    ten::Tensor image({1, 1, 4, 4}, ten::DataType::f32, randomImageData);
+//    inputs.insert({"input.1", image});
+//    ictx::InputContext inCtx(inputs);
+//    mklEngine.Execute(inCtx, g);
 }

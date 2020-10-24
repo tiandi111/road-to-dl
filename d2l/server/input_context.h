@@ -16,9 +16,8 @@ namespace ictx {
     private:
         unordered_map<string, ten::Tensor> inputs;
     public:
-        InputContext();
+        ~InputContext() = default;
         InputContext(unordered_map<string, ten::Tensor>& inputs);
-        ~InputContext();
         unordered_map<string, ten::Tensor>& Inputs();
     };
 }

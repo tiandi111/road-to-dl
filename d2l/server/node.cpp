@@ -107,7 +107,7 @@ const string node::ConvNode::OutputName() const {
 }
 void node::ConvNode::Absorb(std::shared_ptr<Node> another) {
     // todo: different data type
-    if(another->Type() == node::bn) {
+    if( !this->relu && another->Type() == node::bn) {
         std::shared_ptr<node::BatchNormNode> bnNode = std::dynamic_pointer_cast<node::BatchNormNode>(another);
         auto weights = this->GetGraph()->GetMutableWeights();
         auto & convWeight = weights[this->WeightName()];
@@ -211,5 +211,6 @@ string node::BatchNormNode::OutputName() const {
     return this->Outputs()[0];
 }
 void node::BatchNormNode::Absorb(std::shared_ptr<Node> another) {
-
+    // remember, if this has post-relu, it cannot absorb another bn or conv
+    // also, note the difference of bn absorb conv and conv absorb bn
 }

@@ -20,7 +20,14 @@ namespace node {
     enum OpType {
         conv,
         bn,
-        relu
+        relu,
+        gemm,
+        shape,
+        gather,
+        mul,
+        unsqueeze,
+        concat,
+        reshape
     };
 
     class Node {
@@ -131,6 +138,45 @@ namespace node {
         virtual void Absorb(std::shared_ptr<Node> another);
     };
 
+    // Note: we do not need relu node! The base node is enough!
+    class ShapeNode : public Node {
+    public:
+        ShapeNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                std::shared_ptr<grp::Graph> g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    // Gather data on the given dimension
+    // e.g, data is 6×5×4×3, indices is 2×1, axis = 0, then output is 2×1×5×4×3
+    // e.g, data is 6×5×4×3, indices is 2×1, axis = 1, then output is 6×2×1×4×3
+    // e.g, data is 6×5×4×3, indices is 2×1, axis = 2, then output is 6×5×2×1×3
+    // e.g, data is 6×5×4×3, indices is 2×1, axis = 0, then output is 6×5×4×2×1
+    // Why this is usefule?
+    // App1: when we flat matrix, we need to take each of the dimsions,
+    // and multiply them all, gather can be used to take out a certain dim
+    // App2: we may need to construct new features by combining original features in different way
+    // todo: negative index
+    class GatherNode : public Node {
+    private:
+        int axis;
+    public:
+        GatherNode(OpType t,
+                  int id,
+                  vector<string> inputs,
+                  vector<string> outputs,
+                  std::shared_ptr<grp::Graph> g,
+                  int axis)
+                : Node(t, id, inputs, outputs, g), axis(axis) {};
+        inline int Axis() const {return this->axis;}
+        inline string DataName() const {return this->Inputs()[0];}
+        inline string IndicesName() const {return this->Inputs()[1];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
 }
 
 #endif //SERVER_NODE_H

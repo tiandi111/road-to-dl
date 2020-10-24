@@ -38,6 +38,18 @@ namespace load {
             const vector<string>& inputs,
             const vector<string>& outputs,
             shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::ShapeNode> ParseShapeNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::GatherNode> ParseGatherNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
     unordered_map<string, ten::Tensor> ReadWeights(onnx::GraphProto oGraph);
 }
 

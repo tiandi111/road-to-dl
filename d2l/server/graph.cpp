@@ -18,7 +18,7 @@ Graph::Graph(map<string, vector<int>> inDims, map<string, vector<int>> outDims, 
 void Graph::AddNode(std::shared_ptr<node::Node> node) {
     this->nodes.push_back(node);
     for(const auto in : node->Inputs()) {
-        this->inputDepens[in].push_back(node);
+        this->inputDepends[in].push_back(node);
     }
 }
 
@@ -42,6 +42,14 @@ const void * Graph::GetWeightHandle(string name) const {
     return static_cast<const void * >(got->second.Data().data());
 }
 
+const ten::Tensor& Graph::GetWeightTensor(string name) const {
+    auto got = weights.find(name);
+    if(got == weights.end()) {
+        throw std::runtime_error("weight " + name + " not found");
+    }
+    return got->second;
+}
+
 void Graph::Fuse() {
     for(auto it = this->nodes.begin(); it<this->nodes.end(); it++) {
         if(it+1 == this->nodes.end()) {
@@ -50,18 +58,18 @@ void Graph::Fuse() {
         auto node = *it;
         if(node->Type() == node::OpType::conv || node->Type() == node::OpType::bn) {
             string outputName = node->Outputs()[0];
-            if(this->inputDepens[outputName].size() != 1) {
+            if(this->inputDepends[outputName].size() != 1) {
                 it++;
                 continue;
             }
-            auto succNode = this->inputDepens[outputName][0];
+            auto succNode = this->inputDepends[outputName][0];
             if(node->Type() == node::OpType::conv) {
                 std::dynamic_pointer_cast<node::ConvNode>(node)->Absorb(succNode);
             }
             if(node->Type() == node::OpType::bn) {
                 std::dynamic_pointer_cast<node::BatchNormNode>(node)->Absorb(succNode);
             }
-            this->inputDepens.erase(outputName);
+            this->inputDepends.erase(outputName);
             this->nodes.erase(this->nodes.begin()+succNode->ID());
             break;
         }

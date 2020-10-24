@@ -4,10 +4,6 @@
 
 #include "input_context.h"
 
-ictx::InputContext::InputContext() {}
-
-ictx::InputContext::~InputContext() {}
-
 ictx::InputContext::InputContext(unordered_map<string, ten::Tensor>& inputs) {
     this->inputs = inputs;
 }

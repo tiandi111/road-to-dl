@@ -19,19 +19,21 @@ namespace ten {
 
     class Tensor {
     private:
-        vector<int> dims;
+        vector<int64_t> dims;
         DataType dtype;
         vector<char> data;
     public:
-        Tensor();
-        ~Tensor();
-        Tensor(vector<int> dims, DataType t, vector<char> data);
+        Tensor() = default;
+        ~Tensor() = default;
+        Tensor(vector<int64_t>& dims, DataType t, vector<char>& data) :
+                dims(dims), dtype(t), data(data) {};
         const vector<char>& Data() const;
         const DataType Type() const;
-        const vector<int>& Dims() const;
+        const vector<int64_t>& Dims() const;
         // todo: finish this element wise multiplcation
 //        void Multiply(Tensor& A, vector<int>& Axes, bool InPlace);
     };
 }
 
 #endif //SERVER_TENSOR_H
+
