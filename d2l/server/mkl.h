@@ -6,6 +6,7 @@
 #define SERVER_MKL_H
 
 #include "dnnl.hpp"
+#include "tensor.h"
 #include <vector>
 #include <stdexcept>
 
@@ -25,6 +26,11 @@ namespace mkl {
             const vector<int>& dstDims,
             const vector<int>& strides,
             const vector<int>& padding);
+
+    dt TensorDtypeToMKLType(ten::DataType dt);
+
+    // input: the length of the dimensions
+    tag ChosseDefaultTag(int dimLen);
 
     inline void ReadFromDnnlMemory(const void *handle, const dnnl::memory &mem) {
         dnnl::engine eng = mem.get_engine();

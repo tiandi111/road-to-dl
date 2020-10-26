@@ -8,9 +8,8 @@
 #include "dnnl.hpp"
 #include "graph.h"
 #include "mkl.h"
-#include "input_context.h"
+#include "context.h"
 #include "tensor.h"
-#include "utils.h"
 #include <string>
 #include <vector>
 #include <iostream>
@@ -44,7 +43,7 @@ namespace eng {
     public:
         MKLEngine(string name, DeviceType t);
         virtual ~MKLEngine() = default;
-        void Execute(ictx::InputContext& ctx, grp::Graph& g);
+        void Execute(ctx::InputContext& ictx, ctx::OutputContext& octx, grp::Graph& g);
     };
 
     // todo: handle shape, gather and others that may not need or not support by mkl prims
@@ -58,94 +57,192 @@ namespace eng {
     public:
         virtual ~ExecutableNode() = default;
         virtual void Execute() = 0;
+        static dnnl::memory FindInputMemUtil (
+                unordered_map<string, dnnl::memory>& inputs,
+                const unordered_map<string, ten::Tensor>& weights,
+                const dnnl::engine eng,
+                string key) {
+            auto got = inputs.find(key);
+            if( got != inputs.end() ) {
+                return got->second;
+            } // if not in inputs, then must in weight, otherwise will throw exception
+            else {
+                auto got = weights.find(key);
+                if(got == weights.end()) {
+                    throw std::runtime_error("weight " + key + " not found");
+                }
+                auto& tensor = got->second;
+                return dnnl::memory(
+                        {tensor.Dims(),
+                         mkl::TensorDtypeToMKLType(tensor.Type()),
+                         mkl::ChosseDefaultTag(tensor.Dims().size())}, eng, (void*)tensor.Data().data());
+            }
+        }
     };
 
     // todo: maybe we should let all these nodes to init by themselves, think about it
     // nodes that executed natively
-    class ShapeNode : public ExecutableNode {
+    class ExecShapeNode : public ExecutableNode {
     private:
-        dnnl::memory& data;
-        dnnl::memory& dst;
+        dnnl::memory data;
+        dnnl::memory dst;
     public:
-        ShapeNode(dnnl::memory& data, dnnl::memory& dst) : data(data), dst(dst) {};
+        ExecShapeNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::ShapeNode> node,
+                dnnl::engine eng);
         inline void Execute() override {
             mkl::WriteToDnnlMemory(data.get_desc().dims().data(), dst);
         }
     };
 
-    class GatherNode : public ExecutableNode {
+    class ExecGatherNode : public ExecutableNode {
     private:
         int axis;
-        dnnl::memory& data;
-        const ten::Tensor& indices;
+        dnnl::memory data;
+        dnnl::memory indices;
         dnnl::memory dst;
     public:
-        GatherNode(int axis,
-                dnnl::memory& data,
-                const ten::Tensor& indices,
-                dnnl::engine& eng);
-        inline dnnl::memory& GetDstMemory() {return this->dst;}
+        ExecGatherNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::GatherNode> node,
+                dnnl::engine eng);
         void Execute() override ;
     };
 
+    class ExecMulNode : public ExecutableNode {
+    private:
+        dnnl::memory a;
+        dnnl::memory b;
+        dnnl::memory dst;
+    public:
+        ExecMulNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::MulNode> node,
+                dnnl::engine eng);
+        void Execute() override ;
+    };
+
+    class ExecUnsqueezeNode : public ExecutableNode {
+    private:
+        dnnl::memory dst;
+    public:
+        // will create a new dnnl memomry object with same data handle, different shape
+        ExecUnsqueezeNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::UnsqueezeNode> node,
+                dnnl::engine eng);
+        // no execution needed
+        inline void Execute() override {};
+    };
+
+    class ExecReshapeNode : public ExecutableNode {
+    private:
+        dnnl::memory dst;
+    public:
+        // will create a new dnnl memomry object with same data handle, different shape
+        ExecReshapeNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::ReshapeNode> node,
+                dnnl::engine eng);
+        // no execution needed
+        inline void Execute() override {};
+    };
+
+    class ExecFlattenNode : public ExecutableNode {
+    private:
+        dnnl::memory dst;
+    public:
+        // will create a new dnnl memomry object with same data handle, different shape
+        ExecFlattenNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::FlattenNode> node,
+                dnnl::engine eng);
+        // no execution needed
+        inline void Execute() override {};
+    };
+
     // a class of node that executes with the help of mkl
+    // todo: this does not look good, we should leave the initialization for nodes themselves
     class ExecNodeMKL : public ExecutableNode {
     protected:
-        dnnl::stream& stream;
-        dnnl::primitive& prim;
-        unordered_map<int, dnnl::memory>& args;
+        dnnl::stream stream;
+        dnnl::primitive prim;
+        unordered_map<int, dnnl::memory> args;
     public:
-        ExecNodeMKL(dnnl::stream& stream,
+        ExecNodeMKL(dnnl::stream stream) : stream(stream) {};
+        ExecNodeMKL(dnnl::stream stream,
                     dnnl::primitive& prim,
                     unordered_map<int,dnnl::memory>& args) :
                     stream(stream), prim(prim), args(args) {};
         ~ExecNodeMKL() override = default;
         inline void Execute() override {
-            this->prim.execute(this->stream, this->args);
+            prim.execute(stream, args);
         }
     };
+
     class ExecConvNode : public ExecNodeMKL {
     public:
-        ExecConvNode(dnnl::stream& stream,
-                dnnl::primitive& prim,
-                unordered_map<int,dnnl::memory>& args) :
-                ExecNodeMKL(stream, prim, args) {};
+        ExecConvNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::ConvNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
     };
+
     class ExecBNNode : public ExecNodeMKL {
     public:
-        ExecBNNode(dnnl::stream& stream,
-                dnnl::primitive& prim,
-                unordered_map<int,dnnl::memory>& args) :
-                ExecNodeMKL(stream, prim, args) {};
+        ExecBNNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::BatchNormNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
+    };
+
+    class ExecConcatNode : public ExecNodeMKL {
+    public:
+        ExecConcatNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::ConcatNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
+    };
+
+    class ExecGemmNode : public ExecNodeMKL {
+    public:
+        ExecGemmNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::GemmNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
     };
 
     class MKLExecutionContext {
     private:
-        dnnl::stream& stream;
-        dnnl::engine& eng;
+        dnnl::stream stream;
+        dnnl::engine eng;
         unordered_map<string, dnnl::memory>& inputs;
         vector<std::shared_ptr<eng::ExecutableNode>> execNodes;
         grp::Graph& g;
     public:
         MKLExecutionContext(
-                dnnl::stream& stream,
-                dnnl::engine& eng,
+                dnnl::stream stream,
+                dnnl::engine eng,
                 unordered_map<string, dnnl::memory>& inputs,
                 grp::Graph& g);
         void Execute();
     private:
-        inline dnnl::memory& GetInput(string key) {
-            auto srcMemoryPair = inputs.find(key);
-            if(srcMemoryPair == inputs.end()) {
-                throw std::runtime_error("source " + key + " not found");
-            }
-            return srcMemoryPair->second;
-        }
         void InitNode(std::shared_ptr<node::Node> n);
-        void InitConvNode(std::shared_ptr<node::ConvNode> n);
-        void InitBnNode(std::shared_ptr<node::BatchNormNode> n);
-        void InitShapeNode(std::shared_ptr<node::ShapeNode> n);
-        void InitGatherNode(std::shared_ptr<node::GatherNode> n);
     };
 }
 

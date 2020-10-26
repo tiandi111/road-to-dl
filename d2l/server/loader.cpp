@@ -3,7 +3,8 @@
 //
 
 #include "loader.h"
-#include "input_context.h"
+#include "engine.h"
+#include "context.h"
 #include <fstream>
 #include <stdexcept>
 
@@ -51,7 +52,25 @@ node::OpType load::OnnxType2OpType(string t) {
     if(t == "Gather") {
         return node::gather;
     }
-    return node::conv;
+    if(t == "Mul") {
+        return node::mul;
+    }
+    if(t == "Unsqueeze") {
+        return node::unsqueeze;
+    }
+    if(t == "Concat") {
+        return node::concat;
+    }
+    if(t == "Reshape") {
+        return node::reshape;
+    }
+    if(t == "Gemm") {
+        return node::gemm;
+    }
+    if(t == "Flatten") {
+        return node::flatten;
+    }
+    return node::unknown;
 }
 
 ten::DataType load::OnnxDataType2TenDataType(int odtype) {
@@ -83,6 +102,24 @@ std::shared_ptr<node::Node> load::ParseNode(
     }
     if(oNode.op_type() == "Gather") {
         return ParseGatherNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Mul") {
+        return ParseMulNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Unsqueeze") {
+        return ParseUnsqueezeNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Concat") {
+        return ParseConcatNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Reshape") {
+        return ParseReshapeNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Flatten") {
+        return ParseFlattenNode(oNode, id, inputs, outputs, gptr);
+    }
+    if(oNode.op_type() == "Gemm") {
+        return ParseGemmNode(oNode, id, inputs, outputs, gptr);
     }
     node::Node node = node::Node(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr);
     return std::make_shared<node::Node>(node);
@@ -243,6 +280,96 @@ std::shared_ptr<node::GatherNode> load::ParseGatherNode(
             node::GatherNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
 }
 
+std::shared_ptr<node::MulNode> load::ParseMulNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    return std::make_shared<node::MulNode>(
+            node::MulNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+}
+
+std::shared_ptr<node::UnsqueezeNode> load::ParseUnsqueezeNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    return std::make_shared<node::UnsqueezeNode>(
+            node::UnsqueezeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+}
+
+std::shared_ptr<node::ConcatNode> load::ParseConcatNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    int axis;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "axis") {
+            axis = attr.i();
+        }
+    }
+    return std::make_shared<node::ConcatNode>(
+            node::ConcatNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+}
+
+std::shared_ptr<node::FlattenNode> load::ParseFlattenNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    int axis;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "axis") {
+            axis = attr.i();
+        }
+    }
+    return std::make_shared<node::FlattenNode>(
+            node::FlattenNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+}
+
+std::shared_ptr<node::ReshapeNode> load::ParseReshapeNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    return std::make_shared<node::ReshapeNode>(
+            node::ReshapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+}
+
+std::shared_ptr<node::GemmNode> load::ParseGemmNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        shared_ptr<grp::Graph> gptr) {
+    float alpha, beta; bool transA, transB;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "alpha") {
+            alpha = attr.f();
+        }
+        if (attr.name() == "beta") {
+            beta = attr.f();
+        }
+        if (attr.name() == "transA") {
+            transA = attr.i();
+        }
+        if (attr.name() == "transB") {
+            transB = attr.i();
+        }
+    }
+    return std::make_shared<node::GemmNode>(
+            node::GemmNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, alpha, beta, transA, transB, true));
+}
+
 unordered_map<string, ten::Tensor> load::ReadWeights(onnx::GraphProto oGraph) {
     unordered_map<string, ten::Tensor> weights;
     for(int i=0; i<oGraph.initializer_size(); i++) {
@@ -262,12 +389,12 @@ grp::Graph load::LoadOnnx(istream *is) {
 
     onnx::ModelProto oModel = onnx::ModelProto();
     oModel.ParseFromIstream(is);
-    cout<< "load onnx model successfully" <<endl;
+    cout << "load onnx model successfully" << endl;
 
     grp::Graph graph = grp::Graph(ParseInputInfos(oModel), ParseOutputInfos(oModel), load::ReadWeights(oModel.graph()));
 
     // parse node info
-    for(int i=0; i<oModel.graph().node_size(); i++) {
+    for (int i = 0; i < oModel.graph().node_size(); i++) {
         auto oNode = oModel.graph().node(i);
 
         const vector<string> inputs(oNode.input().begin(), oNode.input().end());
@@ -281,25 +408,4 @@ grp::Graph load::LoadOnnx(istream *is) {
     }
 
     return graph;
-}
-
-int main() {
-//    ifstream in("/Users/tiandi03/road-to-dl/d2l/lenet.onnx", ios_base::binary);
-    ifstream in("/Users/tiandi03/road-to-dl/d2l/lenet.onnx", ios_base::binary);
-    auto g = load::LoadOnnx(&in);
-    const vector<std::shared_ptr<node::Node>>& nodes = g.GetNodes();
-    for(const auto & node : nodes) {
-        cout<< node->Type() <<endl;
-    }
-//    g.Fuse();
-//    eng::MKLEngine mklEngine("cpu", eng::DeviceType::cpu);
-//    unordered_map<string, ten::Tensor> inputs;
-//    std::vector<char> randomImageData(64);
-//    std::generate(randomImageData.begin(), randomImageData.end(), []() {
-//        return '0';
-//    });
-//    ten::Tensor image({1, 1, 4, 4}, ten::DataType::f32, randomImageData);
-//    inputs.insert({"input.1", image});
-//    ictx::InputContext inCtx(inputs);
-//    mklEngine.Execute(inCtx, g);
 }

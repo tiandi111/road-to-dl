@@ -12,8 +12,8 @@ add_executable(server
     engine.h
     graph.cpp
     graph.h
-    input_context.cpp
-    input_context.h
+        context.cpp
+        context.h
     loader.cpp
     loader.h
     mkl.cpp
@@ -24,14 +24,45 @@ add_executable(server
     onnx.pb.h
     tensor.cpp
     tensor.h
-    utils.h)
+    utils.h
+    utils.cpp)
+
+target_link_directories(server PUBLIC /usr/local/lib)
+target_link_libraries(server -lprotobuf)
+target_link_libraries(server -ldnnl)
+
 
 add_executable(test
         test/main.cpp
         test/test.h
         test/util_test.h
-        test/util_test.cpp)
+        test/util_test.cpp
+        test/engine_test.h
+        test/engine_test.cpp
+        test/tensor_test.h
+        test/tensor_test.cpp
+        test/intergration_test.h
+        test/intergration_test.cpp
+        engine.cpp
+        engine.h
+        graph.cpp
+        graph.h
+        context.cpp
+        context.h
+        loader.cpp
+        loader.h
+        mkl.cpp
+        mkl.h
+        node.cpp
+        node.h
+        onnx.pb.cc
+        onnx.pb.h
+        tensor.cpp
+        tensor.h
+        utils.h
+        utils.cpp)
 
-target_link_directories(server PUBLIC /usr/local/lib)
-target_link_libraries(server -lprotobuf)
-target_link_libraries(server -ldnnl)
+target_link_directories(test PUBLIC /usr/local/lib)
+target_link_libraries(test -lprotobuf)
+target_link_libraries(test -ldnnl)
+

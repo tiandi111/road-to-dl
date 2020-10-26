@@ -22,11 +22,20 @@ namespace ten {
         vector<int64_t> dims;
         DataType dtype;
         vector<char> data;
+        int64_t bytes;
+
+        void computeBytes();
+        void checkBuffer();
     public:
         Tensor() = default;
         ~Tensor() = default;
-        Tensor(vector<int64_t>& dims, DataType t, vector<char>& data) :
-                dims(dims), dtype(t), data(data) {};
+        Tensor(vector<int64_t> dims, DataType t);
+        Tensor(vector<int64_t> dims, DataType t, vector<char>& data);
+        Tensor(vector<int64_t> dims, DataType t, void* first, int64_t byteSize) :
+                dims(dims), dtype(t), bytes(byteSize) {
+            data = vector<char>((char*)first, ((char*)first)+byteSize);
+        };
+        void Write(void* handle);
         const vector<char>& Data() const;
         const DataType Type() const;
         const vector<int64_t>& Dims() const;

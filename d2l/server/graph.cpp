@@ -10,9 +10,9 @@ using namespace grp;
 Graph::Graph() {}
 
 Graph::Graph(map<string, vector<int>> inDims, map<string, vector<int>> outDims, unordered_map<string, ten::Tensor> w) {
-    this->inputDims = inDims;
-    this->outputDims = outDims;
-    this->weights = w;
+    inputDims = inDims;
+    outputDims = outDims;
+    weights = w;
 }
 
 void Graph::AddNode(std::shared_ptr<node::Node> node) {

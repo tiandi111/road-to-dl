@@ -22,12 +22,14 @@ namespace node {
         bn,
         relu,
         gemm,
+        flatten,
         shape,
         gather,
         mul,
         unsqueeze,
         concat,
-        reshape
+        reshape,
+        unknown
     };
 
     class Node {
@@ -176,6 +178,113 @@ namespace node {
         inline string DataName() const {return this->Inputs()[0];}
         inline string IndicesName() const {return this->Inputs()[1];}
         inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    // element-wise multiplication
+    //
+    class MulNode : public Node {
+    public:
+        MulNode(OpType t,
+                   int id,
+                   vector<string> inputs,
+                   vector<string> outputs,
+                   std::shared_ptr<grp::Graph> g)
+                : Node(t, id, inputs, outputs, g) {};
+        // For onnx
+        // A, B could come from initial weights or output from other nodes
+        inline string InputAName() const {return this->Inputs()[0];}
+        inline string InputBName() const {return this->Inputs()[1];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    // squeeze all single dimensional entries
+    class UnsqueezeNode : public Node {
+    private:
+        vector<int> axes; // not used at this time
+    public:
+        UnsqueezeNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                std::shared_ptr<grp::Graph> g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    class ConcatNode : public Node {
+    private:
+        int axis;
+    public:
+        ConcatNode(OpType t,
+              int id,
+              vector<string> inputs,
+              vector<string> outputs,
+              std::shared_ptr<grp::Graph> g,
+              int axis)
+                : Node(t, id, inputs, outputs, g), axis(axis) {};
+        inline vector<string> InputsName() const {return this->Inputs();}
+        inline string OutputName() const {return this->Outputs()[0];}
+        inline int Axis() const {return this->axis;}
+    };
+
+    class ReshapeNode : public Node {
+    public:
+        ReshapeNode(OpType t,
+                   int id,
+                   vector<string> inputs,
+                   vector<string> outputs,
+                   std::shared_ptr<grp::Graph> g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string DataName() const {return this->Inputs()[0];}
+        inline string ShapeName() const {return this->Inputs()[1];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    class FlattenNode : public Node {
+    private:
+        int axis;
+    public:
+        FlattenNode(OpType t,
+                   int id,
+                   vector<string> inputs,
+                   vector<string> outputs,
+                   std::shared_ptr<grp::Graph> g,
+                   int axis)
+                : Node(t, id, inputs, outputs, g), axis(axis) {};
+        inline string InputsName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+        inline int Axis() const {return this->axis;}
+    };
+
+    class GemmNode : public Node {
+    private:
+        float alpha;
+        float beta;
+        bool transA;
+        bool transB;
+        bool bias;
+    public:
+        GemmNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                std::shared_ptr<grp::Graph> g,
+                float alpha,
+                float beta,
+                int transA,
+                int transB,
+                bool bias)
+                : Node(t, id, inputs, outputs, g), alpha(alpha), beta(beta),transA(transA), transB(transB), bias(bias) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string WeightName() const {return this->Inputs()[1];}
+        inline string BiasName() const {return this->Inputs()[2];}
+        inline string OutputName() const {return this->Outputs()[0];}
+        inline float Alpha() const {return this->alpha;}
+        inline float Beta() const {return this->beta;}
+        inline bool TransA() const {return this->transA;}
+        inline bool TransB() const {return this->transB;}
+        inline bool Bias() const {return this->bias;}
     };
 }
 

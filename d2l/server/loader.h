@@ -50,6 +50,42 @@ namespace load {
             const vector<string>& inputs,
             const vector<string>& outputs,
             shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::MulNode> ParseMulNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::UnsqueezeNode> ParseUnsqueezeNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::ConcatNode> ParseConcatNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::FlattenNode> ParseFlattenNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::ReshapeNode> ParseReshapeNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
+    std::shared_ptr<node::GemmNode> ParseGemmNode(
+            onnx::NodeProto& oNode,
+            int id,
+            const vector<string>& inputs,
+            const vector<string>& outputs,
+            shared_ptr<grp::Graph> gptr);
     unordered_map<string, ten::Tensor> ReadWeights(onnx::GraphProto oGraph);
 }
 

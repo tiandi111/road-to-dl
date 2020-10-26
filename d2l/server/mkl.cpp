@@ -48,6 +48,34 @@ primitive mkl::CnnPrimitive(
     return convolution_forward(conv_pd);
 }
 
-//int main () {
-//
-//}
+dt mkl::TensorDtypeToMKLType(ten::DataType dt) {
+    switch (dt) {
+        case ten::DataType::f32 :
+            return dt::f32;
+        case ten::DataType::i64 :
+            return dt::s32;
+        case ten::DataType::i8 :
+            return dt::s8;
+        default:
+            throw invalid_argument("unknown data type" + to_string(dt));
+    }
+}
+
+tag mkl::ChosseDefaultTag(int dimLen) {
+    switch (dimLen) {
+        case 1 :
+            return tag::a;
+        case 2 :
+            return tag::ab;
+        case 3 :
+            return tag::abc;
+        case 4 :
+            return tag::abcd;
+        case 5 :
+            return tag::abcde;
+        case 6 :
+            return tag::abcdef;
+        default:
+            throw std::runtime_error("data dimension higher than 6 is not supported now");
+    }
+}
