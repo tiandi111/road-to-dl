@@ -1,7 +1,3 @@
 cmake-build-debug
 *.out
-test/models/infer.onnx
-test/models/test_model.py
-test
-test.cpp
 onnx.proto
