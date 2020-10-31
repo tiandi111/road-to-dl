@@ -8,12 +8,12 @@ from tqdm import tqdm
 
 
 class CifarModel():
-    def __init__(self, model: nn.Module, optimizer: optim.Optimizer, device: torch.device):
+    def __init__(self, model: nn.Module, optimizer: optim.Optimizer, device: torch.device = None):
         self.Model = model
         self.Optim = optimizer
         self.LossHist = []
         self.Epoch = 0
-        # self.device = device
+        self.device = device
 
     def predict(self, x: torch.Tensor):
         return self.Model(x)
