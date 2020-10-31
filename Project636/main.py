@@ -16,6 +16,8 @@ def parse():
                         help='tensorboard directory')
     parser.add_argument('--load', dest='loadDir', type=str, default='',
                         help='model directory')
+    parser.add_argument('--data_dir', dest='dataDir', type=str, default='/Users/tiandi03/Desktop/dataset/cifar-10-batches-py',
+                        help='model directory')
 
     return parser.parse_args()
 
@@ -35,7 +37,7 @@ if __name__ == '__main__':
     if args.loadDir != '':
         ResCifarModel.load(args.loadDir)
 
-    trainData, trainLabel, testData, testLabel = loadData("/Users/tiandi03/Desktop/dataset/cifar-10-batches-py")
+    trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
     trainData, trainLabel, validData, validLabel = trainValidSplit(trainData, trainLabel)
 
     criterion = nn.CrossEntropyLoss()
