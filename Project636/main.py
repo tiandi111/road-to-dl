@@ -1,6 +1,7 @@
 import torch
 import time
 import argparse
+from routines import parseTrain, train
 from network import ResNet
 from model import CifarModel
 from loader import loadData, trainValidSplit, localNorm
@@ -19,34 +20,13 @@ def parse():
     parser.add_argument('--data_dir', dest='dataDir', type=str, default='/Users/tiandi03/Desktop/dataset/cifar-10-batches-py',
                         help='model directory')
 
+    subparsers = parser.add_subparsers(help="sub-command help")
+
+    trainParser = subparsers.add_parser('train', help='train help')
+    parseTrain(trainParser)
+
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse()
-
-    if args.device == 'gpu' and torch.cuda.is_available() is not True:
-        print("cuda not available")
-        exit(1)
-    device = torch.device("cuda:0" if args.device == 'gpu' else "cpu")
-
-    ResNet = ResNet(stackSize=(2, 2, 2, 2)).to(device)
-    # weight decay works as this in torch I guess: W(i+1) = （1 - weight_decay）* W（i）
-    optimizer = optim.SGD(ResNet.parameters(), lr=0.001, momentum=0.9, weight_decay=0.1)
-    tbWriter = SummaryWriter(args.tbDir)
-
-    ResCifarModel = CifarModel(ResNet, optimizer)
-    if args.loadDir != '':
-        ResCifarModel.load(args.loadDir)
-
-    trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
-    trainData, trainLabel, validData, validLabel = trainValidSplit(trainData, trainLabel)
-    trainData = localNorm(trainData)
-    validData = localNorm(validData)
-
-    criterion = nn.CrossEntropyLoss()
-    ResCifarModel.train(maxEpochs=10, batchSize=128,
-                        criterion=criterion,
-                        data=torch.from_numpy(trainData).float().to(device), label=torch.from_numpy(trainLabel).long().to(device),
-                        writer=tbWriter)
-
-    ResCifarModel.save("res_cifar_{:d}.pkl".format(int(time.time())))
+    args.func(args)

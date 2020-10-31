@@ -58,7 +58,7 @@ class CifarModel():
             self.Epoch = self.Epoch+1
 
             avgLoss = totalLoss / numBatches
-            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i, maxEpochs, avgLoss, elapsedTime))
+            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i+1, maxEpochs, avgLoss, elapsedTime))
             if writer is not None:
                 writer.add_scalar('training loss', avgLoss, self.Epoch)
             self.LossHist.append(avgLoss)
@@ -68,7 +68,7 @@ class CifarModel():
             {
                 'epoch': self.Epoch,
                 'model_state_dict': self.Model.state_dict(),
-                'optimizer_state_dict': self.Optim.state_dict(),
+                # 'optimizer_state_dict': self.Optim.state_dict(),
                 'loss': self.LossHist,
             },
             path
@@ -76,9 +76,8 @@ class CifarModel():
 
     def load(self, path: str):
         checkpoint = torch.load(path)
-        print(checkpoint)
         self.Model.load_state_dict(checkpoint['model_state_dict'])
-        self.Optim.load_state_dict(checkpoint['optimizer_state_dict'])
+        # self.Optim.load_state_dict(checkpoint['optimizer_state_dict'])
         self.LossHist = checkpoint['loss']
         self.Epoch = checkpoint['epoch']
         self.Model.eval()
