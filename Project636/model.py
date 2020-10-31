@@ -13,7 +13,7 @@ class CifarModel():
         self.Optim = optimizer
         self.LossHist = []
         self.Epoch = 0
-        self.device = device
+        # self.device = device
 
     def predict(self, x: torch.Tensor):
         return self.Model(x)
