@@ -10,9 +10,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 def parseTrain(parser: argparse.ArgumentParser):
+    parser.add_argument('--ep', dest='ep', type=int, default=20, help='max epochs')
     parser.add_argument('--lr', dest='lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--mom', dest='mom', type=float, default=0.9, help='momentum')
-    parser.add_argument('--wd', dest='wd', type=float, default=0.01, help='weight decay')
+    parser.add_argument('--wd', dest='wd', type=float, default=0, help='weight decay')
 
     parser.set_defaults(func=train)
 
@@ -28,10 +29,11 @@ def train(args):
     resNet = ResNet(stackSize=(2, 2, 2, 2)).to(device)
     # weight decay works as this in torch I guess: W(i+1) = （1 - weight_decay）* W（i）
     print("===\n"
-          "Setup optimizer: \n"
+          "Setup trainer: \n"
+          "max epochs: {ep}\n"
           "learning rate: {lr}\n"
           "momentum: {mom}\n"
-          "weight decay: {wd}".format(lr=args.lr, mom=args.mom, wd=args.wd))
+          "weight decay: {wd}".format(ep=args.ep, lr=args.lr, mom=args.mom, wd=args.wd))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
     tbWriter = SummaryWriter(args.tbDir)
 
@@ -51,13 +53,20 @@ def train(args):
     criterion = nn.CrossEntropyLoss()
     print("===\n"
           "Start training...")
-    ResCifarModel.train(maxEpochs=10, batchSize=128,
+    ResCifarModel.train(maxEpochs=args.ep, batchSize=128,
                         criterion=criterion,
-                        data=torch.from_numpy(trainData).float().to(device),
-                        label=torch.from_numpy(trainLabel).long().to(device),
+                        trainData=torch.from_numpy(trainData[:2]).float().to(device),
+                        trainLabel=torch.from_numpy(trainLabel[:2]).long().to(device),
+                        validData=torch.from_numpy(validData[:2]).float().to(device),
+                        validLabel=torch.from_numpy(validLabel[:2]).long().to(device),
                         writer=tbWriter)
 
     savePath = int(time.time())
     print("===\n"
           "Save model to {p}...".format(p=savePath))
     ResCifarModel.save("res_cifar_{:d}.pkl".format(savePath))
+
+# def parseTest(parser: argparse.ArgumentParser):
+#     parser.set_defaults(func=train)
+
+# def test():
