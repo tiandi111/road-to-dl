@@ -30,6 +30,7 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if args.device == 'gpu' else "cpu")
 
     ResNet = ResNet(stackSize=(2, 2, 2, 2)).to(device)
+    # weight decay works as this in torch I guess: W(i+1) = （1 - weight_decay）* W（i）
     optimizer = optim.SGD(ResNet.parameters(), lr=0.001, momentum=0.9, weight_decay=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 

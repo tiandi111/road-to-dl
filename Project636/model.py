@@ -43,7 +43,7 @@ class CifarModel():
             for j in range(numBatches):
                 self.Optim.zero_grad()
 
-                indicies = perm[j*batchSize, j*batchSize+batchSize]
+                indicies = perm[j*batchSize: j*batchSize+batchSize]
 
                 preds = self.predict(data[indicies])
                 loss = criterion.forward(preds, label[indicies])
