@@ -30,7 +30,7 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if args.device == 'gpu' else "cpu")
 
     ResNet = ResNet(stackSize=(2, 2, 2, 2)).to(device)
-    optimizer = optim.SGD(ResNet.parameters(), lr=0.001, momentum=0.9, weight_decay=0.9)
+    optimizer = optim.SGD(ResNet.parameters(), lr=0.001, momentum=0.9, weight_decay=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 
     ResCifarModel = CifarModel(ResNet, optimizer)

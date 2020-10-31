@@ -43,7 +43,7 @@ class CifarModel():
             for j in range(numBatches):
                 self.Optim.zero_grad()
 
-                indicies = perm[j:j + batchSize]
+                indicies = perm[j*batchSize, j*batchSize+batchSize]
 
                 preds = self.predict(data[indicies])
                 loss = criterion.forward(preds, label[indicies])
@@ -54,11 +54,11 @@ class CifarModel():
                 totalLoss += loss
 
             elapsedTime = time.time() - startTime
-            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i, maxEpochs, totalLoss, elapsedTime))
 
             self.Epoch = self.Epoch+1
 
             avgLoss = totalLoss / numBatches
+            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i, maxEpochs, avgLoss, elapsedTime))
             if writer is not None:
                 writer.add_scalar('training loss', avgLoss, self.Epoch)
             self.LossHist.append(avgLoss)
