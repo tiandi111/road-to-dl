@@ -33,7 +33,7 @@ class CifarModel():
             for i, loss in enumerate(self.LossHist):
                 writer.add_scalar('training loss', loss, i)
 
-        for i in range(maxEpochs):
+        for i in tqdm(range(maxEpochs)):
 
             startTime = time.time()
             perm = torch.randperm(len(data))
