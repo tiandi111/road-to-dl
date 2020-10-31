@@ -3,7 +3,7 @@ import time
 import argparse
 from network import ResNet
 from model import CifarModel
-from loader import loadData, trainValidSplit
+from loader import loadData, trainValidSplit, localNorm
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
@@ -39,6 +39,8 @@ if __name__ == '__main__':
 
     trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
     trainData, trainLabel, validData, validLabel = trainValidSplit(trainData, trainLabel)
+    trainData = localNorm(trainData)
+    validData = localNorm(validData)
 
     criterion = nn.CrossEntropyLoss()
     ResCifarModel.train(maxEpochs=10, batchSize=128,

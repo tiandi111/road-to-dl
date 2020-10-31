@@ -65,6 +65,10 @@ def trainValidSplit(x_train, y_train, split_index=45000):
 
     return x_train_new, y_train_new, x_valid, y_valid
 
+def localNorm(data):
+    data = [(d-np.mean(d)) / np.std(d) for d in data ]
+    return np.asarray(data)
+
 def parse_record(record, training=True):
 	"""Parse a record to an image and perform data preprocessing.
 
