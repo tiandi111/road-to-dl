@@ -8,11 +8,12 @@ from tqdm import tqdm
 
 
 class CifarModel():
-    def __init__(self, model: nn.Module, optimizer: optim.Optimizer):
+    def __init__(self, model: nn.Module, optimizer: optim.Optimizer, device: torch.device):
         self.Model = model
         self.Optim = optimizer
         self.LossHist = []
         self.Epoch = 0
+        self.device = device
 
     def predict(self, x: torch.Tensor):
         return self.Model(x)
@@ -38,22 +39,22 @@ class CifarModel():
             perm = torch.randperm(len(data))
 
             numBatches = int(len(data)/batchSize + 1)
-            totalLoss = torch.zeros(1)
-            for i in tqdm(range(numBatches)):
+            totalLoss = 0
+            for j in range(numBatches):
                 self.Optim.zero_grad()
 
-                indicies = perm[i:i + batchSize]
+                indicies = perm[j:j + batchSize]
 
                 preds = self.predict(data[indicies])
                 loss = criterion.forward(preds, label[indicies])
 
                 loss.backward()
                 self.Optim.step()
-                print("  Loss {:.6f}".format(loss))
+                # print("  Loss {:.6f}".format(loss))
                 totalLoss += loss
 
             elapsedTime = time.time() - startTime
-            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3d} seconds...".format(i, maxEpochs, totalLoss, elapsedTime))
+            print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i, maxEpochs, totalLoss, elapsedTime))
 
             self.Epoch = self.Epoch+1
 
