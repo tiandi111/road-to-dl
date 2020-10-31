@@ -14,7 +14,7 @@ def parseTrain(parser: argparse.ArgumentParser):
     parser.add_argument('--lr', dest='lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--mom', dest='mom', type=float, default=0.9, help='momentum')
     parser.add_argument('--wd', dest='wd', type=float, default=0, help='weight decay')
-    parser.add_argument('--batch', dest='batch', type=int, default=32, help='batch size')
+    parser.add_argument('--batch', dest='batch', type=int, default=128, help='batch size')
 
     parser.set_defaults(func=train)
 

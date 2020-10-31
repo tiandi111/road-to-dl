@@ -26,11 +26,12 @@ class CifarModel():
         assert len(data) == len(label)
         # stop auto-grad to save memory
         with torch.no_grad():
+            label = label.cpu().detach().numpy()
             correct = 0
             for i in range(int(len(data) / batchSize) + 1):
-                preds = self.predict(data[i*batchSize:i*batchSize+batchSize].float())
-                preds = [np.argmax(p.cpu().detach().numpy()) for p in preds]
-                correct += np.sum(preds == label)
+                preds = self.predict(data[i*batchSize: i*batchSize+batchSize].float())
+                preds = [np.argmax(p) for p in preds.cpu().detach().numpy()]
+                correct += np.sum(preds == label[i*batchSize: i*batchSize+batchSize])
             return correct / len(data)
 
     def train(self,
