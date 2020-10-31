@@ -22,13 +22,16 @@ class CifarModel():
     def predict(self, x: torch.Tensor):
         return self.Model(x)
 
-    def score(self, data, label: torch.Tensor):
+    def score(self, data, label: torch.Tensor, batchSize: int):
         assert len(data) == len(label)
-        data = data.detach().numpy()
-        label = label.detach().numpy()
-        preds = self.predict(torch.from_numpy(data).float())
-        preds = [np.argmax(p.detach().numpy()) for p in preds]
-        return np.sum(preds == label) / len(data)
+        # stop auto-grad to save memory
+        with torch.no_grad():
+            correct = 0
+            for i in range(int(len(data) / batchSize) + 1):
+                preds = self.predict(data[i*batchSize:i*batchSize+batchSize].float())
+                preds = [np.argmax(p.cpu().detach().numpy()) for p in preds]
+                correct += np.sum(preds == label)
+            return correct / len(data)
 
     def train(self,
               maxEpochs, batchSize: int,
@@ -39,7 +42,8 @@ class CifarModel():
         if writer is not None:
             for i, loss in enumerate(self.LossHist):
                 writer.add_scalar('training loss', loss, i)
-                writer.add_scalar('learning rate', self.LRSchedule[i], i)
+            for i, lr in enumerate(self.LRSchedule):
+                writer.add_scalar('learning rate', lr, i)
 
         for i in tqdm(range(maxEpochs)):
 
@@ -59,7 +63,7 @@ class CifarModel():
                 loss.backward()
                 self.Optim.step()
                 # print("  Loss {:.6f}".format(loss))
-                totalLoss += loss
+                totalLoss += float(loss)
 
             elapsedTime = time.time() - startTime
 
@@ -68,7 +72,10 @@ class CifarModel():
 
             avgLoss = totalLoss / numBatches
             print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i+1, maxEpochs, avgLoss, elapsedTime))
-            print("Test score on validation set {:.3f}".format(self.score(validData, validLabel)))
+            # during validation, change to eval mode so that bn and dropout stop moving average
+            self.Model.eval()
+            print("Test score on validation set {:.3f}".format(self.score(validData, validLabel, batchSize)))
+            self.Model.train()
             if writer is not None:
                 writer.add_scalar('training loss', avgLoss, self.Epoch)
                 writer.add_scalar('learning rate', self.Optim.defaults['lr'], self.Epoch)
@@ -86,11 +93,14 @@ class CifarModel():
             path
         )
 
-    def load(self, path: str):
+    def load(self, path: str, training: bool):
         checkpoint = torch.load(path)
         self.Model.load_state_dict(checkpoint['model_state_dict'])
         # self.Optim.load_state_dict(checkpoint['optimizer_state_dict'])
         self.LossHist = checkpoint['loss']
         self.Epoch = checkpoint['epoch']
         self.LRSchedule = checkpoint['lr']
-        self.Model.eval()
+        if training:
+            self.Model.train()
+        else:
+            self.Model.eval()

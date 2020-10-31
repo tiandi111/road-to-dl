@@ -14,6 +14,7 @@ def parseTrain(parser: argparse.ArgumentParser):
     parser.add_argument('--lr', dest='lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--mom', dest='mom', type=float, default=0.9, help='momentum')
     parser.add_argument('--wd', dest='wd', type=float, default=0, help='weight decay')
+    parser.add_argument('--batch', dest='batch', type=int, default=32, help='batch size')
 
     parser.set_defaults(func=train)
 
@@ -31,9 +32,10 @@ def train(args):
     print("===\n"
           "Setup trainer: \n"
           "max epochs: {ep}\n"
+          "batch size: {bs}\n"
           "learning rate: {lr}\n"
           "momentum: {mom}\n"
-          "weight decay: {wd}".format(ep=args.ep, lr=args.lr, mom=args.mom, wd=args.wd))
+          "weight decay: {wd}".format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
     tbWriter = SummaryWriter(args.tbDir)
 
@@ -41,7 +43,7 @@ def train(args):
     if args.loadDir != '':
         print("===\n"
               "Loading model from {p}...".format(p=args.loadDir))
-        ResCifarModel.load(args.loadDir)
+        ResCifarModel.load(args.loadDir, training=True)
 
     print("===\n"
           "Loading dataset from {p}...".format(p=args.dataDir))
@@ -53,12 +55,12 @@ def train(args):
     criterion = nn.CrossEntropyLoss()
     print("===\n"
           "Start training...")
-    ResCifarModel.train(maxEpochs=args.ep, batchSize=128,
+    ResCifarModel.train(maxEpochs=args.ep, batchSize=args.batch,
                         criterion=criterion,
-                        trainData=torch.from_numpy(trainData[:2]).float().to(device),
-                        trainLabel=torch.from_numpy(trainLabel[:2]).long().to(device),
-                        validData=torch.from_numpy(validData[:2]).float().to(device),
-                        validLabel=torch.from_numpy(validLabel[:2]).long().to(device),
+                        trainData=torch.from_numpy(trainData).float().to(device),
+                        trainLabel=torch.from_numpy(trainLabel).long().to(device),
+                        validData=torch.from_numpy(validData).float().to(device),
+                        validLabel=torch.from_numpy(validLabel).long().to(device),
                         writer=tbWriter)
 
     savePath = int(time.time())
