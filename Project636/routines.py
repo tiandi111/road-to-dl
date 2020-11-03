@@ -58,9 +58,9 @@ def train(args):
           "Start training...")
     ResCifarModel.train(maxEpochs=args.ep, batchSize=args.batch,
                         criterion=criterion,
-                        trainData=torch.from_numpy(trainData).float().to(device),
+                        trainData=torch.from_numpy(trainData).float(),#.to(device),
                         trainLabel=torch.from_numpy(trainLabel).long().to(device),
-                        validData=torch.from_numpy(validData).float().to(device),
+                        validData=torch.from_numpy(validData).float(),#.to(device),
                         validLabel=torch.from_numpy(validLabel).long().to(device),
                         writer=tbWriter)
 

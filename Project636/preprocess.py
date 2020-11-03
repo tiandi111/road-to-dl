@@ -17,7 +17,7 @@ def PreprocessImage(image: torch.Tensor, training: bool):
     return torch.from_numpy(image)
 
 def PreprocessImageBatch(images: torch.Tensor, training: bool):
-    images = images.cpu().detach().numpy()
+    images = images.cpu().detach()
     for i in range(images.size()[0]):
         img = PreprocessImage(images[i], training)
         images[i] = img
