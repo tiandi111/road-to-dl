@@ -37,7 +37,7 @@ def train(args):
           "momentum: {mom}\n"
           "weight decay: {wd}".format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[70, 100], gamma=0.1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[20, 100], gamma=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 
     ResCifarModel = CifarModel(resNet, optimizer, scheduler=scheduler)

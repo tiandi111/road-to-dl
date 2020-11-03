@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from preprocess import PreprocessImage, PreprocessImageBatch
 
 
 class CifarModel():
@@ -31,7 +32,8 @@ class CifarModel():
             label = label.cpu().detach().numpy()
             correct = 0
             for i in range(int(len(data) / batchSize) + 1):
-                preds = self.predict(data[i*batchSize: i*batchSize+batchSize].float())
+                batchData = PreprocessImageBatch(data[i*batchSize: i*batchSize+batchSize], training=False)
+                preds = self.predict(batchData.float())
                 preds = [np.argmax(p) for p in preds.cpu().detach().numpy()]
                 correct += np.sum(preds == label[i*batchSize: i*batchSize+batchSize])
             return correct / len(data)
@@ -60,7 +62,9 @@ class CifarModel():
 
                 indicies = perm[j*batchSize: j*batchSize+batchSize]
 
-                preds = self.predict(trainData[indicies])
+                batchData = PreprocessImageBatch(trainData[indicies], training=True)
+
+                preds = self.predict(batchData)
                 loss = criterion.forward(preds, trainLabel[indicies])
 
                 loss.backward()
