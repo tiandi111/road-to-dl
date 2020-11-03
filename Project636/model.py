@@ -12,7 +12,7 @@ class CifarModel():
     def __init__(self,
                  model: nn.Module,
                  optimizer: optim.Optimizer,
-                 device: torch.device = None,
+                 device: torch.device,
                  scheduler: optim.lr_scheduler = None):
         self.Model = model
         self.Optim = optimizer
@@ -33,7 +33,7 @@ class CifarModel():
             correct = 0
             for i in range(int(len(data) / batchSize) + 1):
                 batchData = PreprocessImageBatch(data[i*batchSize: i*batchSize+batchSize], training=False)
-                preds = self.predict(batchData.float())
+                preds = self.predict(batchData.to(self.device).float())
                 preds = [np.argmax(p) for p in preds.cpu().detach().numpy()]
                 correct += np.sum(preds == label[i*batchSize: i*batchSize+batchSize])
             return correct / len(data)
@@ -64,7 +64,7 @@ class CifarModel():
 
                 batchData = PreprocessImageBatch(trainData[indicies], training=True)
 
-                preds = self.predict(batchData)
+                preds = self.predict(batchData.to(self.device))
                 loss = criterion.forward(preds, trainLabel[indicies])
 
                 loss.backward()
