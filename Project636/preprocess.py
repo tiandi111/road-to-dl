@@ -3,7 +3,7 @@ import numpy as np
 
 
 def PreprocessImage(image: torch.Tensor, training: bool):
-    image = image.detach().numpy()
+    image = image.cpu().detach().numpy()
     if training is True:
         # padding at sides
         image = np.lib.pad(image, ((0, 0), (4, 4), (4, 4)), mode='constant', constant_values=((0, 0), (0, 0), (0, 0)))
@@ -17,6 +17,7 @@ def PreprocessImage(image: torch.Tensor, training: bool):
     return torch.from_numpy(image)
 
 def PreprocessImageBatch(images: torch.Tensor, training: bool):
+    images = images.cpu().detach().numpy()
     for i in range(images.size()[0]):
         img = PreprocessImage(images[i], training)
         images[i] = img
