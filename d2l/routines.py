@@ -49,7 +49,9 @@ if __name__ == '__main__':
     ])
     y = np.take(data, indices, axis=1)
 
-    print(y.shape)
+    print(y.shape.shape)
+
+    np.squeeze
 
 # if __name__ == '__main__':
 #     net = leNet.LeNet()

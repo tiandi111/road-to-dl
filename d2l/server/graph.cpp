@@ -7,14 +7,6 @@
 #include <iostream>
 using namespace grp;
 
-Graph::Graph() {}
-
-Graph::Graph(map<string, vector<int>> inDims, map<string, vector<int>> outDims, unordered_map<string, ten::Tensor> w) {
-    inputDims = inDims;
-    outputDims = outDims;
-    weights = w;
-}
-
 void Graph::AddNode(std::shared_ptr<node::Node> node) {
     this->nodes.push_back(node);
     for(const auto in : node->Inputs()) {
