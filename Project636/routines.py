@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parseTrain(parser: argparse.ArgumentParser):
     parser.add_argument('--ep', dest='ep', type=int, default=20, help='max epochs')
-    parser.add_argument('--lr', dest='lr', type=float, default=0.01, help='learning rate')
+    parser.add_argument('--lr', dest='lr', type=float, default=0.01, help='initial learning rate')
     parser.add_argument('--mom', dest='mom', type=float, default=0.9, help='momentum')
     parser.add_argument('--wd', dest='wd', type=float, default=0, help='weight decay')
     parser.add_argument('--batch', dest='batch', type=int, default=128, help='batch size')
@@ -33,13 +33,14 @@ def train(args):
           "Setup trainer: \n"
           "max epochs: {ep}\n"
           "batch size: {bs}\n"
-          "learning rate: {lr}\n"
+          "initial learning rate: {lr}\n"
           "momentum: {mom}\n"
           "weight decay: {wd}".format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[70, 100], gamma=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 
-    ResCifarModel = CifarModel(resNet, optimizer)
+    ResCifarModel = CifarModel(resNet, optimizer, scheduler=scheduler)
     if args.loadDir != '':
         print("===\n"
               "Loading model from {p}...".format(p=args.loadDir))

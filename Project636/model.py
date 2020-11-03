@@ -11,13 +11,15 @@ class CifarModel():
     def __init__(self,
                  model: nn.Module,
                  optimizer: optim.Optimizer,
-                 device: torch.device = None):
+                 device: torch.device = None,
+                 scheduler: optim.lr_scheduler = None):
         self.Model = model
         self.Optim = optimizer
         self.LossHist = []
         self.Epoch = 0
         self.device = device
         self.LRSchedule = []
+        self.LRScheduler = scheduler
 
     def predict(self, x: torch.Tensor):
         return self.Model(x)
@@ -68,8 +70,11 @@ class CifarModel():
 
             elapsedTime = time.time() - startTime
 
+            if self.LRScheduler is not None:
+                self.LRScheduler.step()
+
             self.Epoch = self.Epoch+1
-            self.LRSchedule.append(self.Optim.defaults['lr'])
+            self.LRSchedule.append(self.Optim.param_groups[0]['lr'])
 
             avgLoss = totalLoss / numBatches
             print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i+1, maxEpochs, avgLoss, elapsedTime))
