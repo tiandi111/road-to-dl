@@ -1,5 +1,7 @@
 *__pycache__
 *.onnx
 *.pkl
+*.pt
+*.jit
 *log
 *.idea

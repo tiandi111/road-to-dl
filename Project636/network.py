@@ -39,13 +39,13 @@ class ResNet(nn.Module):
 
             (64, 64, 64)
     """
-    def __init__(self, stackSize = (2, 2, 2, 2)):
+    def __init__(self, firstNumFilter: int, stackSize = (2, 2, 2, 2)):
         super(ResNet, self).__init__()
-        self.InConv = nn.Conv2d(3, 64, (3, 3), 1, 1)
+        self.InConv = nn.Conv2d(3, firstNumFilter, (3, 3), 1, 1)
         self.ResPart = nn.Sequential()
-        self.lastOutC = 64
+        self.lastOutC = firstNumFilter
         for i in range(len(stackSize)):
-            outC = 256 * (2**i)
+            outC = 4*firstNumFilter * (2**i)
             bottC = int(outC / 4)
             for j in range(stackSize[0]):
                 self.ResPart.add_module("stack{i}_{j}".format(i=i, j=j),
@@ -60,7 +60,8 @@ class ResNet(nn.Module):
     def forward(self, x: torch.Tensor):
         x = self.InConv(x)
         x = self.ResPart(x)
-        x = F.avg_pool2d(x, int(x.size()[2]))
+        poolSize = int(x.size()[2])
+        x = F.avg_pool2d(x, poolSize)
         return self.FC(x.view(-1, self.lastOutC))
 
 

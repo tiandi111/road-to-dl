@@ -1,13 +1,5 @@
-import torch
-import time
 import argparse
-from routines import parseTrain, train
-from network import ResNet
-from model import CifarModel
-from loader import loadData, trainValidSplit, localNorm
-import torch.optim as optim
-import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
+from routines import parseTrain, parseTest
 
 def parse():
     parser = argparse.ArgumentParser(description='Project636 Routines.')
@@ -24,6 +16,9 @@ def parse():
 
     trainParser = subparsers.add_parser('train', help='train help')
     parseTrain(trainParser)
+
+    testParser = subparsers.add_parser('test', help='test help')
+    parseTest(testParser)
 
     return parser.parse_args()
 

@@ -1,6 +1,7 @@
 import time
 import torch
 import numpy as np
+import torch.jit as jit
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
@@ -11,8 +12,8 @@ from preprocess import PreprocessImage, PreprocessImageBatch
 class CifarModel():
     def __init__(self,
                  model: nn.Module,
-                 optimizer: optim.Optimizer,
                  device: torch.device,
+                 optimizer: optim.Optimizer = None,
                  scheduler: optim.lr_scheduler = None):
         self.Model = model
         self.Optim = optimizer
@@ -92,6 +93,15 @@ class CifarModel():
             self.LossHist.append(avgLoss)
 
     def save(self, path: str):
+        model = jit.script(self.Model)
+        jit.save(model, path)
+
+    def saveOnnx(self, path: str):
+        input = torch.zeros(1, 3, 32, 32)
+        output = self.Model(input)
+        torch.onnx.export(self.Model, args=input, f=path, example_outputs=output, verbose=False)
+
+    def saveCheckpoint(self, path: str):
         torch.save(
             {
                 'epoch': self.Epoch,
@@ -103,7 +113,7 @@ class CifarModel():
             path
         )
 
-    def load(self, path: str, training: bool):
+    def loadCheckpoint(self, path: str, training: bool):
         checkpoint = torch.load(path)
         self.Model.load_state_dict(checkpoint['model_state_dict'])
         # self.Optim.load_state_dict(checkpoint['optimizer_state_dict'])
