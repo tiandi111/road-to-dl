@@ -34,8 +34,8 @@ def loadData(data_dir):
                 x_train = np.concatenate((x_train, dict[b'data']))
                 y_train = np.concatenate((y_train, dict[b'labels']))
     with open("%s/test_batch" % data_dir, 'rb') as fo:
-        x_test = dict[b'data']
-        y_test = dict[b'labels']
+        x_test = np.asarray(dict[b'data'])
+        y_test = np.asarray(dict[b'labels'])
 
     x_train = x_train.reshape((50000, 3, 32, 32))
     x_test = x_test.reshape((10000, 3, 32, 32))
