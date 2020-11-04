@@ -97,7 +97,7 @@ class CifarModel():
         jit.save(model, path)
 
     def saveOnnx(self, path: str):
-        input = torch.zeros(1, 3, 32, 32)
+        input = torch.zeros(1, 3, 32, 32).to(self.device)
         output = self.Model(input)
         torch.onnx.export(self.Model, args=input, f=path, example_outputs=output, verbose=False)
 

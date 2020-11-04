@@ -38,7 +38,9 @@ def train(args):
           "batch size: {bs}\n"
           "initial learning rate: {lr}\n"
           "momentum: {mom}\n"
-          "weight decay: {wd}".format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd))
+          "weight decay: {wd}\n"
+          "number of filters at the first layer: {numf}".
+          format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd, numf=args.firstNumFilters))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[15, 20, 30], gamma=0.1)
     tbWriter = SummaryWriter(args.tbDir)
