@@ -42,7 +42,7 @@ def train(args):
           "number of filters at the first layer: {numf}".
           format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd, numf=args.firstNumFilters))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[15, 20, 30], gamma=0.1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[70, 130, 145, 160, 175, 190], gamma=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 
     ResCifarModel = CifarModel(resNet, optimizer=optimizer, device=device, scheduler=scheduler)
