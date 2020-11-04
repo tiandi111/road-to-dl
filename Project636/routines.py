@@ -16,7 +16,7 @@ def parseTrain(parser: argparse.ArgumentParser):
     parser.add_argument('--mom', dest='mom', type=float, default=0.9, help='momentum')
     parser.add_argument('--wd', dest='wd', type=float, default=0, help='weight decay')
     parser.add_argument('--batch', dest='batch', type=int, default=128, help='batch size')
-    parser.add_argument('--validSplit', dest='validSplit', type=int, default=25, help='train-valid split percent')
+    parser.add_argument('--validSplit', dest='validSplit', type=int, default=10, help='train-valid split percent')
     parser.add_argument('--firstNumFilters', dest='firstNumFilters', type=int, default=16,
                         help='number of filters at the first layer')
 
@@ -55,7 +55,9 @@ def train(args):
     print("===\n"
           "Loading dataset from {p}...".format(p=args.dataDir))
     trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
-    trainData, trainLabel, validData, validLabel = trainValidSplit(trainData, trainLabel, split_index=)
+    splitIndex = int(len(trainData)*(1-args.validSplit*0.01))
+    print("{:d} images will be reserved as validation set".format(len(trainData)-splitIndex))
+    trainData, trainLabel, validData, validLabel = trainValidSplit(trainData, trainLabel, split_index=splitIndex)
     trainData = localNorm(trainData)
     validData = localNorm(validData)
 

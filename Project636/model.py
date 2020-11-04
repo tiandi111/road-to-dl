@@ -85,7 +85,8 @@ class CifarModel():
             print("Epoch {:d}/{:d}, Loss {:.6f}, Elapsed {:.3f} seconds...".format(i+1, maxEpochs, avgLoss, elapsedTime))
             # during validation, change to eval mode so that bn and dropout stop moving average
             self.Model.eval()
-            print("Test score on validation set {:.3f}".format(self.score(validData, validLabel, batchSize)))
+            if len(validData) > 0:
+                print("Test score on validation set {:.3f}".format(self.score(validData, validLabel, batchSize)))
             self.Model.train()
             if writer is not None:
                 writer.add_scalar('training loss', avgLoss, self.Epoch)
