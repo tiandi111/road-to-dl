@@ -31,7 +31,7 @@ def train(args):
     print("===\n"
           "Setup device: {d}".format(d=args.device))
 
-    resNet = ResNet(firstNumFilter=16, stackSize=(2, 2)).to(device)
+    resNet = ResNet(firstNumFilter=args.firstNumFilters, stackSize=(1,)).to(device)
     # weight decay works as this in torch I guess: W(i+1) = （1 - weight_decay）* W（i）
     print("===\n"
           "Setup trainer: \n"
@@ -66,10 +66,10 @@ def train(args):
           "Start training...")
     ResCifarModel.train(maxEpochs=args.ep, batchSize=args.batch,
                         criterion=criterion,
-                        trainData=torch.from_numpy(trainData).float(),#.to(device),
-                        trainLabel=torch.from_numpy(trainLabel).long().to(device),
-                        validData=torch.from_numpy(validData).float(),#.to(device),
-                        validLabel=torch.from_numpy(validLabel).long().to(device),
+                        trainData=torch.from_numpy(trainData[:1]).float(),#.to(device),
+                        trainLabel=torch.from_numpy(trainLabel[:1]).long().to(device),
+                        validData=torch.from_numpy(validData[:1]).float(),#.to(device),
+                        validLabel=torch.from_numpy(validLabel[:1]).long().to(device),
                         writer=tbWriter)
 
     timestamp = int(time.time())
@@ -118,3 +118,9 @@ def test(args):
                             batchSize=128)
     print("===\n"
           "Score: {:.3f}".format(score))
+
+if __name__ == '__main__':
+    model = jit.load("./res_cifar_1604595636.jit")
+    model.eval()
+    input = torch.ones(1, 3, 32, 32)
+    print(model(input))

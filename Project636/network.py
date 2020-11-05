@@ -60,8 +60,8 @@ class ResNet(nn.Module):
     def forward(self, x: torch.Tensor):
         x = self.InConv(x)
         x = self.ResPart(x)
-        poolSize = int(x.size()[2])
-        x = F.avg_pool2d(x, poolSize)
-        return self.FC(x.view(-1, self.lastOutC))
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = self.FC(x.view(1, int(x.size()[1])))
+        return x
 
 
