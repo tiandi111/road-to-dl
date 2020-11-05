@@ -70,6 +70,22 @@ node::OpType load::OnnxType2OpType(string t) {
     if(t == "Flatten") {
         return node::flatten;
     }
+    if(t == "Pad") {
+        return node::pad;
+    }
+    if(t == "AveragePool") {
+        return node::avgpool;
+    }
+    if(t == "GlobalAveragePool") {
+        return node::gavgpool;
+    }
+    if(t == "Add") {
+        return node::add;
+    }
+    // constant node is not supported now!
+//    if(t == "Constant") {
+//        return node::constant;
+//    }
     return node::unknown;
 }
 
@@ -90,38 +106,53 @@ std::shared_ptr<node::Node> load::ParseNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     if(oNode.op_type() == "Conv") {
-        return ParseConvNode(oNode, id, inputs, outputs, gptr);
+        return ParseConvNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "BatchNormalization") {
-        return ParseBnNode(oNode, id, inputs, outputs, gptr);
+        return ParseBnNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Shape") {
-        return ParseShapeNode(oNode, id, inputs, outputs, gptr);
+        return ParseShapeNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Gather") {
-        return ParseGatherNode(oNode, id, inputs, outputs, gptr);
+        return ParseGatherNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Mul") {
-        return ParseMulNode(oNode, id, inputs, outputs, gptr);
+        return ParseMulNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Unsqueeze") {
-        return ParseUnsqueezeNode(oNode, id, inputs, outputs, gptr);
+        return ParseUnsqueezeNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Concat") {
-        return ParseConcatNode(oNode, id, inputs, outputs, gptr);
+        return ParseConcatNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Reshape") {
-        return ParseReshapeNode(oNode, id, inputs, outputs, gptr);
+        return ParseReshapeNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Flatten") {
-        return ParseFlattenNode(oNode, id, inputs, outputs, gptr);
+        return ParseFlattenNode(oNode, id, inputs, outputs, g);
     }
     if(oNode.op_type() == "Gemm") {
-        return ParseGemmNode(oNode, id, inputs, outputs, gptr);
+        return ParseGemmNode(oNode, id, inputs, outputs, g);
     }
-    node::Node node = node::Node(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr);
+    if(oNode.op_type() == "Pad") {
+        return ParsePadNode(oNode, id, inputs, outputs, g);
+    }
+    if(oNode.op_type() == "AveragePool") {
+        return ParseAvgPoolingNode(oNode, id, inputs, outputs, g);
+    }
+    if(oNode.op_type() == "GlobalAveragePool") {
+        return ParseGlobalAvgPoolingNode(oNode, id, inputs, outputs, g);
+    }
+    if(oNode.op_type() == "Add") {
+        return ParseAddNode(oNode, id, inputs, outputs, g);
+    }
+    if(oNode.op_type() == "Constant") {
+        return ParseConstantNode(oNode, id, inputs, outputs, g);
+    }
+    node::Node node = node::Node(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g);
     return std::make_shared<node::Node>(node);
 }
 
@@ -130,7 +161,7 @@ std::shared_ptr<node::ConvNode> load::ParseConvNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     int group;
     vector<int> dilations;
     vector<int> kernelShape;
@@ -159,15 +190,15 @@ std::shared_ptr<node::ConvNode> load::ParseConvNode(
     }
     for(const auto & in : inputs) {
         auto name = in;
-        auto got = gptr->GetWeights().find(name);
+        auto got = g.GetWeights().find(name);
         if(name.rfind("weight") != string::npos) {
-            if(got == gptr->GetWeights().end()) {
+            if(got == g.GetWeights().end()) {
                 throw "conv layer weight not found, the model may have been broken";
             }
             weightDims.assign(got->second.Dims().begin(), got->second.Dims().end());
             weightName = name;
         } else if(name.rfind("bias") != string::npos) {
-            if(got == gptr->GetWeights().end()) {
+            if(got == g.GetWeights().end()) {
                 throw "conv layer bias not found, the model may have been broken";
             }
             biasDims.assign(got->second.Dims().begin(), got->second.Dims().end());
@@ -181,7 +212,7 @@ std::shared_ptr<node::ConvNode> load::ParseConvNode(
             id,
             inputs,
             outputs,
-            gptr,
+            g,
             group,
             dilations,
             kernelShape,
@@ -200,7 +231,7 @@ std::shared_ptr<node::BatchNormNode> load::ParseBnNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     float epsilon;
     float momentum; // factor used to compute running mean and standard
     vector<int> dim;
@@ -231,8 +262,8 @@ std::shared_ptr<node::BatchNormNode> load::ParseBnNode(
             srcInputName = in;
         }
     }
-    auto got = gptr->GetWeights().find(weightName);
-    if(got == gptr->GetWeights().end()) {
+    auto got = g.GetWeights().find(weightName);
+    if(got == g.GetWeights().end()) {
         throw std::invalid_argument("weight " + weightName + " not found for batch norm node" + std::to_string(id));
     }
     dim.assign(got->second.Dims().begin(), got->second.Dims().end());
@@ -241,7 +272,7 @@ std::shared_ptr<node::BatchNormNode> load::ParseBnNode(
             id,
             inputs,
             outputs,
-            gptr,
+            g,
             epsilon,
             momentum,
             dim,
@@ -258,9 +289,9 @@ std::shared_ptr<node::ShapeNode> load::ParseShapeNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     return std::make_shared<node::ShapeNode>(
-            node::ShapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+            node::ShapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
 }
 
 std::shared_ptr<node::GatherNode> load::ParseGatherNode(
@@ -268,7 +299,7 @@ std::shared_ptr<node::GatherNode> load::ParseGatherNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     int axis;
     for(int i=0; i<oNode.attribute_size(); i++) {
         auto attr = oNode.attribute(i);
@@ -277,7 +308,7 @@ std::shared_ptr<node::GatherNode> load::ParseGatherNode(
         }
     }
     return std::make_shared<node::GatherNode>(
-            node::GatherNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+            node::GatherNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g, axis));
 }
 
 std::shared_ptr<node::MulNode> load::ParseMulNode(
@@ -285,9 +316,9 @@ std::shared_ptr<node::MulNode> load::ParseMulNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     return std::make_shared<node::MulNode>(
-            node::MulNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+            node::MulNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
 }
 
 std::shared_ptr<node::UnsqueezeNode> load::ParseUnsqueezeNode(
@@ -295,9 +326,9 @@ std::shared_ptr<node::UnsqueezeNode> load::ParseUnsqueezeNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     return std::make_shared<node::UnsqueezeNode>(
-            node::UnsqueezeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+            node::UnsqueezeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
 }
 
 std::shared_ptr<node::ConcatNode> load::ParseConcatNode(
@@ -305,7 +336,7 @@ std::shared_ptr<node::ConcatNode> load::ParseConcatNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     int axis;
     for(int i=0; i<oNode.attribute_size(); i++) {
         auto attr = oNode.attribute(i);
@@ -314,7 +345,7 @@ std::shared_ptr<node::ConcatNode> load::ParseConcatNode(
         }
     }
     return std::make_shared<node::ConcatNode>(
-            node::ConcatNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+            node::ConcatNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g, axis));
 }
 
 std::shared_ptr<node::FlattenNode> load::ParseFlattenNode(
@@ -322,7 +353,7 @@ std::shared_ptr<node::FlattenNode> load::ParseFlattenNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     int axis;
     for(int i=0; i<oNode.attribute_size(); i++) {
         auto attr = oNode.attribute(i);
@@ -331,7 +362,7 @@ std::shared_ptr<node::FlattenNode> load::ParseFlattenNode(
         }
     }
     return std::make_shared<node::FlattenNode>(
-            node::FlattenNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, axis));
+            node::FlattenNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g, axis));
 }
 
 std::shared_ptr<node::ReshapeNode> load::ParseReshapeNode(
@@ -339,9 +370,9 @@ std::shared_ptr<node::ReshapeNode> load::ParseReshapeNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     return std::make_shared<node::ReshapeNode>(
-            node::ReshapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr));
+            node::ReshapeNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
 }
 
 std::shared_ptr<node::GemmNode> load::ParseGemmNode(
@@ -349,7 +380,7 @@ std::shared_ptr<node::GemmNode> load::ParseGemmNode(
         int id,
         const vector<string>& inputs,
         const vector<string>& outputs,
-        shared_ptr<grp::Graph> gptr) {
+        grp::Graph& g) {
     float alpha, beta; bool transA, transB;
     for(int i=0; i<oNode.attribute_size(); i++) {
         auto attr = oNode.attribute(i);
@@ -367,7 +398,102 @@ std::shared_ptr<node::GemmNode> load::ParseGemmNode(
         }
     }
     return std::make_shared<node::GemmNode>(
-            node::GemmNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, gptr, alpha, beta, transA, transB, true));
+            node::GemmNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g, alpha, beta,
+                    transA, transB, true));
+}
+
+std::shared_ptr<node::PadNode> load::ParsePadNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        grp::Graph& g) {
+    string mode;
+    vector<int> pads;
+    float value;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "mode") {
+            mode = attr.s();
+        }
+        if (attr.name() == "pads") {
+            pads.assign(attr.ints().begin(), attr.ints().end());
+        }
+        if (attr.name() == "value") {
+            value = attr.f();
+        }
+    }
+    return std::make_shared<node::PadNode>(
+            node::PadNode(load::OnnxType2OpType(oNode.op_type()),
+                          id, inputs, outputs, g, mode, pads, value));
+}
+
+std::shared_ptr<node::AvgPoolingNode> load::ParseAvgPoolingNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        grp::Graph& g) {
+    vector<int> kernelShape, pads, strides;
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if (attr.name() == "kernel_shape") {
+            kernelShape.assign(attr.ints().begin(), attr.ints().end());
+        }
+        if (attr.name() == "pads") {
+            pads.assign(attr.ints().begin(), attr.ints().end());
+        }
+        if (attr.name() == "strides") {
+            strides.assign(attr.ints().begin(), attr.ints().end());
+        }
+    }
+    return std::make_shared<node::AvgPoolingNode>(
+            node::AvgPoolingNode(load::OnnxType2OpType(oNode.op_type()),
+                          id, inputs, outputs, g, kernelShape, pads, strides));
+}
+
+std::shared_ptr<node::GlobalAvgPoolingNode> load::ParseGlobalAvgPoolingNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        grp::Graph& g) {
+    return std::make_shared<node::GlobalAvgPoolingNode>(
+            node::GlobalAvgPoolingNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
+}
+
+std::shared_ptr<node::AddNode> load::ParseAddNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        grp::Graph& g) {
+    return std::make_shared<node::AddNode>(
+            node::AddNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
+}
+
+std::shared_ptr<node::ConstantNode> load::ParseConstantNode(
+        onnx::NodeProto& oNode,
+        int id,
+        const vector<string>& inputs,
+        const vector<string>& outputs,
+        grp::Graph& g) {
+    for(int i=0; i<oNode.attribute_size(); i++) {
+        auto attr = oNode.attribute(i);
+        if(attr.name() == "value") {
+            auto container = attr.t();
+            vector<int64_t> dims(container.dims().begin(), container.dims().end());
+            vector<char> data(container.raw_data().begin(), container.raw_data().end());
+            g.AddWeight(outputs[0], ten::Tensor(
+                    dims,
+                    load::OnnxDataType2TenDataType(container.data_type()),
+                    data));
+        } else {
+            throw runtime_error("attribute " + attr.name() + " is not supported now");
+        }
+    }
+    return std::make_shared<node::ConstantNode>(
+            node::ConstantNode(load::OnnxType2OpType(oNode.op_type()), id, inputs, outputs, g));
 }
 
 unordered_map<string, ten::Tensor> load::ReadWeights(onnx::GraphProto oGraph) {
@@ -399,9 +525,7 @@ grp::Graph load::LoadOnnx(istream *is) {
 
         const vector<string> inputs(oNode.input().begin(), oNode.input().end());
         const vector<string> outputs(oNode.output().begin(), oNode.output().end());
-        shared_ptr<grp::Graph> gptr = make_shared<grp::Graph>(graph);
-        auto node = load::ParseNode(oNode, i, inputs, outputs, gptr);
-//        auto node_ptr = std::make_shared<node::Node>(load::ParseNode(oNode, i, inputs, outputs, graph));
+        auto node = load::ParseNode(oNode, i, inputs, outputs, graph);
 
         graph.AddNode(node);
 

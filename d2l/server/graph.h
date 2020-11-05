@@ -37,12 +37,14 @@ namespace grp {
         Graph(map<string, vector<int>> inDims,
                 map<string, vector<int>> outDims,
                 unordered_map<string, ten::Tensor> w) : inputDims(inDims), outputDims(outDims), weights(w) {}
-
         ~Graph() = default;
         void AddNode(std::shared_ptr<node::Node> node);
         const vector<std::shared_ptr<node::Node>>& GetNodes() const;
         const unordered_map<string, ten::Tensor>& GetWeights() const;
         unordered_map<string, ten::Tensor>& GetMutableWeights();
+        inline void AddWeight(const string& k, const ten::Tensor& w) {
+            this->weights.insert({k, w});
+        }
         const void * GetWeightHandle(string name) const;
         const ten::Tensor& GetWeightTensor(string name) const;
         void Fuse();

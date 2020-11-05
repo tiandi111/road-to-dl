@@ -29,6 +29,11 @@ namespace node {
         unsqueeze,
         concat,
         reshape,
+        pad,
+        avgpool,
+        gavgpool,
+        add,
+        constant,
         unknown
     };
 
@@ -38,22 +43,26 @@ namespace node {
         vector<string> outputs;
 //        vector<Node&> succs;  // todo: this need to be done with shared pointers
         OpType type;
-        std::shared_ptr<grp::Graph> g;
+        grp::Graph& g;
         int id;
     public:
-        Node();
         Node(OpType t,
                 int id,
                 vector<string> inputs,
                 vector<string> outputs,
-                std::shared_ptr<grp::Graph> g);
+                grp::Graph& g) : type(t), id(id), inputs(inputs), outputs(outputs), g(g) {};
         virtual ~Node() = default;
-        const OpType Type() const;
-        const vector<string> Inputs() const;
-        const vector<string> Outputs() const;
-        const std::shared_ptr<grp::Graph> GetGraph() const;
-        int ID() const;
-        virtual void Absorb(Node another);
+        inline const OpType Type() const { return this->type; }
+        inline const vector<string> Inputs() const { return this->inputs; }
+        inline const vector<string> Outputs() const { return this->outputs; }
+        inline grp::Graph& GetGraph() { return this->g; }
+        inline int ID() const { return this->id; }
+        virtual bool Absorb(Node another);
+
+    protected:
+        inline void setOutputs(vector<string> outputs) {
+            this->outputs = outputs;
+        }
     };
 
     class ConvNode : public Node {
@@ -70,14 +79,13 @@ namespace node {
         string biasName;
         bool relu;
     public:
-        ConvNode();
         virtual ~ConvNode() = default;
         ConvNode(
                 OpType t,
                 int id,
                 vector<string> inputs,
                 vector<string> outputs,
-                std::shared_ptr<grp::Graph> g,
+                grp::Graph& g,
                 int group,
                 vector<int> dilations,
                 vector<int> kernelShape,
@@ -97,8 +105,9 @@ namespace node {
         const string WeightName() const;
         const string BiasName() const;
         const string OutputName() const;
-        virtual void Absorb(std::shared_ptr<Node> another);
+        virtual bool Absorb(std::shared_ptr<Node> another);
         void EnablePostRelu();
+        inline const bool PostRelu() const {return this->relu;}
     };
 
     class BatchNormNode : public Node {
@@ -111,15 +120,15 @@ namespace node {
         string meanName;
         string varName;
         string srcInputName;
+        bool relu;
     public:
-        BatchNormNode();
         virtual ~BatchNormNode() = default;
         BatchNormNode(
                 node::OpType t,
                 int id,
                 const vector<string> inputs,
                 const vector<string> outputs,
-                std::shared_ptr<grp::Graph> g,
+                grp::Graph& g,
                 float epsilon,
                 float momentum,
                 vector<int> dim,
@@ -137,7 +146,9 @@ namespace node {
         string VarName() const;
         string SrcInputName() const;
         string OutputName() const;
-        virtual void Absorb(std::shared_ptr<Node> another);
+        virtual bool Absorb(std::shared_ptr<Node> another);
+        inline void EnablePostRelu() {this->relu = true;}
+        inline const bool PostRelu() const {return this->relu;}
     };
 
     // Note: we do not need relu node! The base node is enough!
@@ -147,7 +158,7 @@ namespace node {
                 int id,
                 vector<string> inputs,
                 vector<string> outputs,
-                std::shared_ptr<grp::Graph> g)
+                grp::Graph& g)
                 : Node(t, id, inputs, outputs, g) {};
         inline string InputName() const {return this->Inputs()[0];}
         inline string OutputName() const {return this->Outputs()[0];}
@@ -171,7 +182,7 @@ namespace node {
                   int id,
                   vector<string> inputs,
                   vector<string> outputs,
-                  std::shared_ptr<grp::Graph> g,
+                   grp::Graph& g,
                   int axis)
                 : Node(t, id, inputs, outputs, g), axis(axis) {};
         inline int Axis() const {return this->axis;}
@@ -188,7 +199,7 @@ namespace node {
                    int id,
                    vector<string> inputs,
                    vector<string> outputs,
-                   std::shared_ptr<grp::Graph> g)
+                   grp::Graph& g)
                 : Node(t, id, inputs, outputs, g) {};
         // For onnx
         // A, B could come from initial weights or output from other nodes
@@ -206,7 +217,7 @@ namespace node {
                 int id,
                 vector<string> inputs,
                 vector<string> outputs,
-                std::shared_ptr<grp::Graph> g)
+                grp::Graph& g)
                 : Node(t, id, inputs, outputs, g) {};
         inline string InputName() const {return this->Inputs()[0];}
         inline string OutputName() const {return this->Outputs()[0];}
@@ -220,7 +231,7 @@ namespace node {
               int id,
               vector<string> inputs,
               vector<string> outputs,
-              std::shared_ptr<grp::Graph> g,
+              grp::Graph& g,
               int axis)
                 : Node(t, id, inputs, outputs, g), axis(axis) {};
         inline vector<string> InputsName() const {return this->Inputs();}
@@ -234,7 +245,7 @@ namespace node {
                    int id,
                    vector<string> inputs,
                    vector<string> outputs,
-                   std::shared_ptr<grp::Graph> g)
+                   grp::Graph& g)
                 : Node(t, id, inputs, outputs, g) {};
         inline string DataName() const {return this->Inputs()[0];}
         inline string ShapeName() const {return this->Inputs()[1];}
@@ -249,7 +260,7 @@ namespace node {
                    int id,
                    vector<string> inputs,
                    vector<string> outputs,
-                   std::shared_ptr<grp::Graph> g,
+                   grp::Graph& g,
                    int axis)
                 : Node(t, id, inputs, outputs, g), axis(axis) {};
         inline string InputsName() const {return this->Inputs()[0];}
@@ -269,7 +280,7 @@ namespace node {
                 int id,
                 vector<string> inputs,
                 vector<string> outputs,
-                std::shared_ptr<grp::Graph> g,
+                grp::Graph& g,
                 float alpha,
                 float beta,
                 int transA,
@@ -285,6 +296,87 @@ namespace node {
         inline bool TransA() const {return this->transA;}
         inline bool TransB() const {return this->transB;}
         inline bool Bias() const {return this->bias;}
+    };
+
+    class PadNode : public Node {
+    private:
+        string mode;
+        vector<int> pads;
+        float value;
+    public:
+        PadNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                grp::Graph& g,
+                string& mode,
+                vector<int>& pads,
+                float value)
+                : Node(t, id, inputs, outputs, g), mode(mode), pads(pads), value(value) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+        inline string Mode() const {return this->mode;}
+        inline const vector<int>& Pads() const {return this->pads;}
+        inline float Value() const {return this->value;}
+    };
+
+    class AvgPoolingNode : public Node {
+    private:
+        vector<int> kernelShape;
+        vector<int> pads;
+        vector<int> strides;
+    public:
+        AvgPoolingNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                grp::Graph& g,
+                vector<int>& kernelShape,
+                vector<int>& pads,
+                vector<int>& strides)
+                : Node(t, id, inputs, outputs, g), kernelShape(kernelShape), pads(pads), strides(strides) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+        inline const vector<int>& KernelShape() const {return this->kernelShape;}
+        inline const vector<int>& Pads() const {return this->pads;}
+        inline const vector<int>& Strides() const {return this->strides;}
+    };
+
+    class GlobalAvgPoolingNode : public Node {
+    public:
+        GlobalAvgPoolingNode(OpType t,
+                       int id,
+                       vector<string> inputs,
+                       vector<string> outputs,
+                       grp::Graph& g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string InputName() const {return this->Inputs()[0];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    class AddNode : public Node {
+    public:
+        AddNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                grp::Graph& g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string InputA() const {return this->Inputs()[0];}
+        inline string InputB() const {return this->Inputs()[1];}
+        inline string OutputName() const {return this->Outputs()[0];}
+    };
+
+    class ConstantNode : public Node {
+    private:
+    public:
+        ConstantNode(OpType t,
+                int id,
+                vector<string> inputs,
+                vector<string> outputs,
+                grp::Graph& g)
+                : Node(t, id, inputs, outputs, g) {};
+        inline string OutputName() const {return this->Outputs()[0];}
     };
 }
 

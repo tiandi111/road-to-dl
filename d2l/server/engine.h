@@ -168,6 +168,30 @@ namespace eng {
         inline void Execute() override {};
     };
 
+    class ExecPadNode : public ExecutableNode {
+    private:
+        dnnl::memory dst;
+    public:
+        ExecPadNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::PadNode> node,
+                dnnl::engine eng);
+        inline void Execute() override {};
+    };
+
+    class ExecConstantNode : public ExecutableNode {
+    private:
+        dnnl::memory dst;
+    public:
+        ExecConstantNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::ConstantNode> node,
+                dnnl::engine eng) {};
+        inline void Execute() override {};
+    };
+
     // a class of node that executes with the help of mkl
     // todo: this does not look good, we should leave the initialization for nodes themselves
     class ExecNodeMKL : public ExecutableNode {
@@ -226,6 +250,37 @@ namespace eng {
                 dnnl::engine eng,
                 dnnl::stream stream);
     };
+
+    class ExecAvgPoolingNode2D : public ExecNodeMKL {
+    public:
+        ExecAvgPoolingNode2D(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::AvgPoolingNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
+    };
+
+    class ExecGlobalAvgPoolingNode2D : public ExecNodeMKL {
+    public:
+        ExecGlobalAvgPoolingNode2D(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::GlobalAvgPoolingNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
+    };
+
+    class ExecAddNode : public ExecNodeMKL {
+    public:
+        ExecAddNode(
+                unordered_map<string, dnnl::memory>& inputs,
+                grp::Graph& g,
+                shared_ptr<node::AddNode> node,
+                dnnl::engine eng,
+                dnnl::stream stream);
+    };
+
 
     class MKLExecutionContext {
     private:

@@ -70,6 +70,9 @@ void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
     switch(n->Type()) {
         case node::OpType::conv : {
             std::shared_ptr<node::ConvNode> node = std::dynamic_pointer_cast<node::ConvNode>(n);
+            if(node->KernelShape().size() != 2) {
+                throw runtime_error(to_string(node->KernelShape().size()-2) + "d convolution is not supported now");
+            }
             ExecConvNode execNode(inputs, g, node, eng, stream);
             execNodes.push_back(std::make_shared<ExecConvNode>(execNode));
             break;
@@ -122,10 +125,43 @@ void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
             execNodes.push_back(std::make_shared<ExecFlattenNode>(execNode));
             break;
         }
+        case node::OpType::constant : {
+            std::shared_ptr<node::ConstantNode> node = std::dynamic_pointer_cast<node::ConstantNode>(n);
+            ExecConstantNode execNode(inputs, g, node, eng);
+            execNodes.push_back(std::make_shared<ExecConstantNode>(execNode));
+            break;
+        }
         case node::OpType::gemm : {
             std::shared_ptr<node::GemmNode> node = std::dynamic_pointer_cast<node::GemmNode>(n);
             ExecGemmNode execNode(inputs, g, node, eng, stream);
             execNodes.push_back(std::make_shared<ExecGemmNode>(execNode));
+            break;
+        }
+        case node::OpType::pad : {
+            std::shared_ptr<node::PadNode> node = std::dynamic_pointer_cast<node::PadNode>(n);
+            ExecPadNode execNode(inputs, g, node, eng);
+            execNodes.push_back(std::make_shared<ExecPadNode>(execNode));
+            break;
+        }
+        case node::OpType::avgpool : {
+            std::shared_ptr<node::AvgPoolingNode> node = std::dynamic_pointer_cast<node::AvgPoolingNode>(n);
+            if(node->KernelShape().size() != 4) {
+                throw runtime_error(to_string(node->KernelShape().size()-2) + "d pooling is not supported now");
+            }
+            ExecAvgPoolingNode2D execNode(inputs, g, node, eng, stream);
+            execNodes.push_back(std::make_shared<ExecAvgPoolingNode2D>(execNode));
+            break;
+        }
+        case node::OpType::gavgpool : {
+            std::shared_ptr<node::GlobalAvgPoolingNode> node = std::dynamic_pointer_cast<node::GlobalAvgPoolingNode>(n);
+            ExecGlobalAvgPoolingNode2D execNode(inputs, g, node, eng, stream);
+            execNodes.push_back(std::make_shared<ExecGlobalAvgPoolingNode2D>(execNode));
+            break;
+        }
+        case node::OpType::add : {
+            std::shared_ptr<node::AddNode> node = std::dynamic_pointer_cast<node::AddNode>(n);
+            ExecAddNode execNode(inputs, g, node, eng, stream);
+            execNodes.push_back(std::make_shared<ExecAddNode>(execNode));
             break;
         }
         default:
@@ -168,12 +204,9 @@ eng::ExecConvNode::ExecConvNode(
     memory::dims dst_dims(dstDims.begin(), dstDims.end());
     // Strides, padding dimensions.
     memory::dims strides_dims(node->Strides().begin(), node->Strides().end());
-    memory::dims padding_dims_l;
-    memory::dims padding_dims_r;
-    for(int i=0; i<node->Pads().size(); i+=2) {
-        padding_dims_l.push_back(node->Pads()[i]);
-        padding_dims_r.push_back(node->Pads()[i+1]);
-    }
+    auto pads = node->Pads();
+    memory::dims paddingDimsLeft(pads.begin(), pads.begin()+pads.size()/2);
+    memory::dims paddingDimsRight(pads.begin()+pads.size()/2, pads.end());
     // Create memory descriptors with format_tag::any for the primitive. This
     // enables the convolution primitive to choose memory layouts for an
     // optimized primitive implementation, and these layouts may differ from the
@@ -186,11 +219,19 @@ eng::ExecConvNode::ExecConvNode(
     // Create operation descriptor.
     auto conv_desc = convolution_forward::desc(prop_kind::forward_training,
                                                algorithm::convolution_direct, conv_src_md, conv_weights_md,
-                                               user_bias_md, conv_dst_md, strides_dims, padding_dims_l,
-                                               padding_dims_r);
-    primitive_attr conv_attr;
+                                               user_bias_md, conv_dst_md, strides_dims, paddingDimsLeft,
+                                               paddingDimsRight);
+
+    // set post-relu
+    primitive_attr convAttr;
+    if(node->PostRelu()) {
+        post_ops postOps;
+        postOps.append_eltwise(1, algorithm::eltwise_relu, 0, 0);
+        convAttr.set_post_ops(postOps);
+    }
+
     // Create primitive descriptor.
-    auto conv_pd = convolution_forward::primitive_desc(conv_desc, conv_attr, eng);
+    auto conv_pd = convolution_forward::primitive_desc(conv_desc, convAttr, eng);
     // Create the primitive.
     // In case dnnl creates a different format from the user defined one, we need to reorder them
     auto convSrcMem = srcMemory;
@@ -232,6 +273,7 @@ eng::ExecBNNode::ExecBNNode(
         dnnl::stream stream) : ExecNodeMKL(stream) {
     // retrieve srouce memory
     auto srcMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->SrcInputName());
+    auto dstMem = dnnl::memory({srcMem.get_desc().dims(), dt::f32, tag::nchw}, eng);
     // scale and shift memory
     auto scaleShiftMd = memory::desc({2, node->Dim()[0]}, dt::f32, tag::nc);
     auto scaleShiftMem = memory(scaleShiftMd, eng);
@@ -245,9 +287,15 @@ eng::ExecBNNode::ExecBNNode(
             prop_kind::forward_inference, srcMem.get_desc(), node->Epsilon(),
                 normalization_flags::use_scale_shift
                 | normalization_flags::use_global_stats);
+    // set post-relu
+    primitive_attr bnormAttr;
+    if(node->PostRelu()) {
+        post_ops postOps;
+        postOps.append_eltwise(1, algorithm::eltwise_relu, 0, 0);
+        bnormAttr.set_post_ops(postOps);
+    }
     // Create primitive descriptor.
-    auto bnormPD
-            = batch_normalization_forward::primitive_desc(bnormDesc, eng);
+    auto bnormPD = batch_normalization_forward::primitive_desc(bnormDesc, bnormAttr, eng);
     // Create memory objects using memory descriptors created by the primitive
     // descriptor: mean, variance, workspace.
     // NOTE: Here, the ReLU post-ops require a workspace for later usage in
@@ -269,9 +317,9 @@ eng::ExecBNNode::ExecBNNode(
             {DNNL_ARG_MEAN, meanMem},
             {DNNL_ARG_VARIANCE, varianceMem},
             {DNNL_ARG_SCALE_SHIFT, scaleShiftMem},
-            {DNNL_ARG_DST, srcMem}
+            {DNNL_ARG_DST, dstMem}
     };
-    inputs.insert({node->OutputName(), srcMem});
+    inputs.insert({node->OutputName(), dstMem});
 }
 
 eng::ExecShapeNode::ExecShapeNode(
@@ -455,6 +503,26 @@ eng::ExecFlattenNode::ExecFlattenNode(
     inputs.insert({node->OutputName(), dst});
 }
 
+eng::ExecPadNode::ExecPadNode(
+        unordered_map<string, dnnl::memory>& inputs,
+        grp::Graph& g,
+        shared_ptr<node::PadNode> node,
+        dnnl::engine eng) {
+    bool allZero = true;
+    for(int pad : node->Pads()) {
+        if(pad != 0) {
+            allZero = false;
+            break;
+        }
+    }
+    auto dataMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputName());
+    if(allZero) {
+        inputs.insert({node->OutputName(), dataMem});
+    } else {
+        throw runtime_error("pad node is not supported");
+    }
+}
+
 eng::ExecConcatNode::ExecConcatNode(
         unordered_map<string, dnnl::memory>& inputs,
         grp::Graph& g,
@@ -534,10 +602,98 @@ eng::ExecGemmNode::ExecGemmNode(
         prim = matmul(primDesc);
     }
 
-
     args.insert({DNNL_ARG_SRC, srcMem});
     args.insert({DNNL_ARG_WEIGHTS, weightMem});
     args.insert({DNNL_ARG_BIAS, biasMem});
     args.insert({DNNL_ARG_DST, dstMem});
+    inputs.insert({node->OutputName(), dstMem});
+}
+
+eng::ExecAvgPoolingNode2D::ExecAvgPoolingNode2D(
+        unordered_map<string, dnnl::memory>& inputs,
+        grp::Graph& g,
+        shared_ptr<node::AvgPoolingNode> node,
+        dnnl::engine eng,
+        dnnl::stream stream) : ExecNodeMKL(stream) {
+    auto srcMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputName());
+
+    auto srcDims = srcMem.get_desc().dims();
+    auto dstDims = utils::ComputeConvOutputDims(
+            srcDims[0], srcDims[2], srcDims[3], node->KernelShape()[0], node->KernelShape()[1],
+            node->Pads()[0], node->Pads()[1], node->Pads()[2], node->Pads()[3], node->Strides()[0], node->Strides()[1],
+            srcDims[1]);
+    auto dstMem = memory({dstDims, dt::f32, tag::any}, eng);
+
+    auto pads = node->Pads();
+    memory::dims strides(node->Strides().begin(), node->Strides().end());
+    memory::dims kernelShape(node->KernelShape().begin(), node->KernelShape().end());
+    memory::dims paddingDimsLeft(pads.begin(), pads.begin()+pads.size()/2);
+    memory::dims paddingDimsRight(pads.begin()+pads.size()/2, pads.end());
+    memory::dims dilationDims(node->KernelShape().size(), 0);
+
+    auto poolingDesc = pooling_v2_forward::desc(prop_kind::forward_inference, algorithm::pooling_avg,
+                                                srcMem.get_desc(), dstMem.get_desc(),
+                                                strides, kernelShape,
+                                                dilationDims, paddingDimsLeft, paddingDimsRight);
+
+    auto poolingPd = pooling_v2_forward::primitive_desc(poolingDesc, eng);
+
+    prim = pooling_v2_forward(poolingPd);
+
+    args.insert({DNNL_ARG_SRC, srcMem});
+    args.insert({DNNL_ARG_DST, dstMem});
+    inputs.insert({node->OutputName(), dstMem});
+}
+
+eng::ExecGlobalAvgPoolingNode2D::ExecGlobalAvgPoolingNode2D(
+        unordered_map<string, dnnl::memory>& inputs,
+        grp::Graph& g,
+        shared_ptr<node::GlobalAvgPoolingNode> node,
+        dnnl::engine eng,
+        dnnl::stream stream) : ExecNodeMKL(stream) {
+    auto srcMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputName());
+
+    auto srcDims = srcMem.get_desc().dims();
+    if(srcDims.size() != 4) {
+        throw runtime_error(to_string(srcDims.size()-2) + "d pooling is not supported now");
+    }
+
+    auto dstMem = memory({{srcDims[0], srcDims[1], 1, 1}, dt::f32, tag::nchw}, eng);
+
+    auto poolingDesc = pooling_v2_forward::desc(prop_kind::forward_inference, algorithm::pooling_avg_exclude_padding,
+                                                srcMem.get_desc(), dstMem.get_desc(),
+                                                {1, 1}, {srcDims[2], srcDims[3]},
+                                                {0, 0}, {0, 0}, {0, 0});
+
+    auto poolingPd = pooling_v2_forward::primitive_desc(poolingDesc, eng);
+
+    prim = pooling_v2_forward(poolingPd);
+
+    args.insert({DNNL_ARG_SRC, srcMem});
+    args.insert({DNNL_ARG_DST, dstMem});
+    inputs.insert({node->OutputName(), dstMem});
+}
+
+eng::ExecAddNode::ExecAddNode(
+        unordered_map<string, dnnl::memory>& inputs,
+        grp::Graph& g,
+        shared_ptr<node::AddNode> node,
+        dnnl::engine eng,
+        dnnl::stream stream) : ExecNodeMKL(stream) {
+
+    auto srcAMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputA());
+    auto srcBMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputB());
+
+    vector<float> scales(2, 1);
+    vector<memory::desc> srcMemDescs = {srcAMem.get_desc(), srcBMem.get_desc()};
+
+    auto sumPD = sum::primitive_desc(scales, srcMemDescs, eng);
+    prim = sum(sumPD);
+
+    auto dstMem = memory(sumPD.dst_desc(), eng);
+
+    args.insert({DNNL_ARG_DST, dstMem});
+    args.insert({DNNL_ARG_MULTIPLE_SRC, srcAMem});
+    args.insert({DNNL_ARG_MULTIPLE_SRC+1, srcBMem});
     inputs.insert({node->OutputName(), dstMem});
 }

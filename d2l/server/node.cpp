@@ -9,53 +9,17 @@
 
 using namespace std;
 
-node::Node::Node() {}
-
-node::Node::Node(
-        node::OpType t,
-        int id,
-        vector<string> inputs,
-        vector<string> outputs,
-        shared_ptr<grp::Graph> g) {
-    this->type = t;
-    this->id = id;
-    this->inputs = inputs;
-    this->outputs = outputs;
-    this->g = g;
-}
-
-const node::OpType node::Node::Type() const {
-    return this->type;
-}
-
-const vector<string> node::Node::Inputs() const {
-    return this->inputs;
-}
-
-const vector<string> node::Node::Outputs() const {
-    return this->outputs;
-}
-
-const std::shared_ptr<grp::Graph> node::Node::GetGraph() const {
-    return this->g;
-}
-
-int node::Node::ID() const {
-    return this->id;
-}
-
-void node::Node::Absorb(Node another) {
+bool node::Node::Absorb(Node another) {
     throw std::runtime_error("node type " + to_string(this->Type()) + " does not support fuse");
+    return false;
 }
-
-node::ConvNode::ConvNode() {}
 
 node::ConvNode::ConvNode(
         node::OpType t,
         int id,
         const vector<string> inputs,
         const vector<string> outputs,
-        std::shared_ptr<grp::Graph> g,
+        grp::Graph& g,
         int group,
         vector<int> dilations,
         vector<int> kernelShape,
@@ -105,11 +69,11 @@ const string node::ConvNode::BiasName() const {
 const string node::ConvNode::OutputName() const {
     return this->Outputs()[0];
 }
-void node::ConvNode::Absorb(std::shared_ptr<Node> another) {
+bool node::ConvNode::Absorb(std::shared_ptr<Node> another) {
     // todo: different data type
     if( !this->relu && another->Type() == node::bn) {
         std::shared_ptr<node::BatchNormNode> bnNode = std::dynamic_pointer_cast<node::BatchNormNode>(another);
-        auto weights = this->GetGraph()->GetMutableWeights();
+        auto weights = this->GetGraph().GetMutableWeights();
         auto & convWeight = weights[this->WeightName()];
         auto & convBias = weights[this->BiasName()];
         auto & mean = weights[bnNode->MeanName()];
@@ -146,25 +110,27 @@ void node::ConvNode::Absorb(std::shared_ptr<Node> another) {
             cb[i] = scalar[i] * cb[i] + shifter[i];
         }
 
-        return;
+        vector<string> newOutputs = {another->Outputs()[0]};
+        this->setOutputs(newOutputs);
+        return true;
     }
     if(another->Type() == node::relu) {
         this->EnablePostRelu();
-        return;
+        this->setOutputs(another->Outputs());
+        return true;
     }
-    throw runtime_error("node type " + to_string(this->Type()) + " cannot absorb type " + to_string(another->Type()));
+    return false;
 }
 void node::ConvNode::EnablePostRelu() {
     this->relu = true;
 }
 
-node::BatchNormNode::BatchNormNode(){}
 node::BatchNormNode::BatchNormNode(
         node::OpType t,
         int id,
         const vector<string> inputs,
         const vector<string> outputs,
-        std::shared_ptr<grp::Graph> g,
+        grp::Graph& g,
         float epsilon,
         float momentum,
         vector<int> dim,
@@ -210,7 +176,13 @@ string node::BatchNormNode::SrcInputName() const {
 string node::BatchNormNode::OutputName() const {
     return this->Outputs()[0];
 }
-void node::BatchNormNode::Absorb(std::shared_ptr<Node> another) {
+bool node::BatchNormNode::Absorb(std::shared_ptr<Node> another) {
     // remember, if this has post-relu, it cannot absorb another bn or conv
     // also, note the difference of bn absorb conv and conv absorb bn
+    if(another->Type() == node::relu) {
+        this->EnablePostRelu();
+        this->setOutputs(vector<string>(another->Outputs()));
+        return true;
+    }
+    return false;
 }

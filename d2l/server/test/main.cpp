@@ -15,6 +15,11 @@ int main() {
 //    utilTest::TestMul3D();
 
 //    engineTest::TestExecGemmNode();
+//    engineTest::TestBNNode();
+//    engineTest::TestAddNode();
+//    engineTest::TestGlobalAvgPoolingNode2D();
+//    engineTest::TestConvBNNode();
+//    engineTest::TestConvBNReluGemmNode();
 
 //    tensorTest::TestTensor();
 //    tensorTest::TestWrite();

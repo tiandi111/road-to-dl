@@ -25,7 +25,8 @@ add_executable(server
     tensor.cpp
     tensor.h
     utils.h
-    utils.cpp)
+    utils.cpp
+    main.cpp)
 
 target_link_directories(server PUBLIC /usr/local/lib)
 target_link_libraries(server -lprotobuf)

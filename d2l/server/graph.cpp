@@ -50,20 +50,25 @@ void Graph::Fuse() {
         auto node = *it;
         if(node->Type() == node::OpType::conv || node->Type() == node::OpType::bn) {
             string outputName = node->Outputs()[0];
-            if(this->inputDepends[outputName].size() != 1) {
-                it++;
+            // a node with multiple out edges can not absorb any of its child
+            // (except all children are exactly the same, but we ignore this situation for now)
+            auto got = this->inputDepends.find(outputName);
+            if(got == this->inputDepends.end() || got->second.size()>1) {
                 continue;
             }
-            auto succNode = this->inputDepends[outputName][0];
-            if(node->Type() == node::OpType::conv) {
-                std::dynamic_pointer_cast<node::ConvNode>(node)->Absorb(succNode);
+            auto succNode = got->second[0];
+            // if succNode is absorbed
+            if((node->Type() == node::OpType::conv && std::dynamic_pointer_cast<node::ConvNode>(node)->Absorb(succNode)) ||
+            (node->Type() == node::OpType::bn && std::dynamic_pointer_cast<node::BatchNormNode>(node)->Absorb(succNode))) {
+                this->inputDepends.erase(outputName);
+                for(auto it1=it; it1<this->nodes.end(); it1++) {
+                    if((*it1)->ID() == succNode->ID()) {
+                        this->nodes.erase(it1);
+                        break;
+                    }
+                }
+                it--;
             }
-            if(node->Type() == node::OpType::bn) {
-                std::dynamic_pointer_cast<node::BatchNormNode>(node)->Absorb(succNode);
-            }
-            this->inputDepends.erase(outputName);
-            this->nodes.erase(this->nodes.begin()+succNode->ID());
-            break;
         }
     }
 }
