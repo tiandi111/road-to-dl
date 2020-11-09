@@ -5,7 +5,7 @@ from effnet_routine import parseEffNet
 
 def parse():
     parser = argparse.ArgumentParser(description='Project636 Routines.')
-    parser.add_argument('--device', dest='device', type=str, choices=['cpu', 'gpu'], default='cpu',
+    parser.add_argument('--device', dest='device', type=str, default='cpu',
                         help='choose device to run the routines')
     parser.add_argument('--tensorboard_dir', dest='tbDir', type=str, default='./log',
                         help='tensorboard directory')

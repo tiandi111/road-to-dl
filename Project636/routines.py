@@ -29,7 +29,7 @@ def train(args):
     if args.device == 'gpu' and torch.cuda.is_available() is not True:
         print("cuda not available")
         exit(1)
-    device = torch.device("cuda:0" if args.device == 'gpu' else "cpu")
+    device = torch.device('cuda:0' if args.device == 'gpu' else args.device)
     print("===\n"
           "Setup device: {d}".format(d=args.device))
 
