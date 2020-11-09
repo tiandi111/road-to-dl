@@ -35,8 +35,8 @@ def EffNetGridSearch(args):
             i += 1
             layers = 16-int(16*df)
             arch = [3, 4, 6, 3]
-            for i in range(layers):
-                arch[i % 4] -= 1
+            for j in range(layers):
+                arch[j % 4] -= 1
             arch = [str(i) for i in arch]
             cmd = ("python {rt}/main.py --data_dir={data} --device={dev} train "
                       "--firstNumFilters={fil} "
