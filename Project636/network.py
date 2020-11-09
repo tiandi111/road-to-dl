@@ -61,7 +61,7 @@ class ResNet(nn.Module):
         x = self.InConv(x)
         x = self.ResPart(x)
         x = F.adaptive_avg_pool2d(x, (1, 1))
-        x = self.FC(x.view(1, int(x.size()[1])))
+        x = self.FC(x.view(int(x.size()[0]), int(x.size()[1])))
         return x
 
 

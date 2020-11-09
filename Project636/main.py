@@ -1,5 +1,7 @@
 import argparse
-from routines import parseTrain, parseTest
+from routines import parseTrain
+from test_routine import parseTest
+from effnet_routine import parseEffNet
 
 def parse():
     parser = argparse.ArgumentParser(description='Project636 Routines.')
@@ -19,6 +21,9 @@ def parse():
 
     testParser = subparsers.add_parser('test', help='test help')
     parseTest(testParser)
+
+    effNetParser = subparsers.add_parser('effnet', help='effnet help')
+    parseEffNet(effNetParser)
 
     return parser.parse_args()
 

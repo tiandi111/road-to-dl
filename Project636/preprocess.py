@@ -1,8 +1,5 @@
 import torch
 import numpy as np
-from loader import loadData
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 
 
 def PreprocessImage(image: torch.Tensor, training: bool) -> torch.Tensor:
@@ -28,11 +25,3 @@ def PreprocessImageBatch(images: torch.Tensor, training: bool):
         images[i] = img
     return images
 
-if __name__ == '__main__':
-    trainData, trainLabel, testData, testLabel = loadData('/Users/tiandi03/Desktop/dataset/cifar-10-batches-py')
-    for i in range(10):
-        img = PreprocessImage(torch.from_numpy(trainData[11]), training=True).detach().numpy()
-        # img = trainData[11]
-        img = np.transpose(img, (1, 2, 0))
-        plt.imshow(img)
-        plt.show()

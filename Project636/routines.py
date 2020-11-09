@@ -19,6 +19,8 @@ def parseTrain(parser: argparse.ArgumentParser):
     parser.add_argument('--validSplit', dest='validSplit', type=int, default=10, help='train-valid split percent')
     parser.add_argument('--firstNumFilters', dest='firstNumFilters', type=int, default=16,
                         help='number of filters at the first layer')
+    parser.add_argument('--arch', dest='arch', type=str, default='2,2,2,2',
+                        help='network architecture')
 
     parser.set_defaults(func=train)
 
@@ -31,19 +33,21 @@ def train(args):
     print("===\n"
           "Setup device: {d}".format(d=args.device))
 
-    resNet = ResNet(firstNumFilter=args.firstNumFilters, stackSize=(1,)).to(device)
+    arch = [int(l) for l in args.arch.split(',')]
+    resNet = ResNet(firstNumFilter=args.firstNumFilters, stackSize=arch).to(device)
     # weight decay works as this in torch I guess: W(i+1) = （1 - weight_decay）* W（i）
     print("===\n"
           "Setup trainer: \n"
+          "network architecture: {arc}\n"
           "max epochs: {ep}\n"
           "batch size: {bs}\n"
           "initial learning rate: {lr}\n"
           "momentum: {mom}\n"
           "weight decay: {wd}\n"
           "number of filters at the first layer: {numf}".
-          format(ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd, numf=args.firstNumFilters))
+          format(arc=arch, ep=args.ep, bs=args.batch, lr=args.lr, mom=args.mom, wd=args.wd, numf=args.firstNumFilters))
     optimizer = optim.SGD(resNet.parameters(), lr=args.lr, momentum=args.mom, weight_decay=args.wd)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[70, 130, 145, 160, 175, 190], gamma=0.1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=[60, 120, 140, 160, 175, 190], gamma=0.1)
     tbWriter = SummaryWriter(args.tbDir)
 
     ResCifarModel = CifarModel(resNet, optimizer=optimizer, device=device, scheduler=scheduler)
@@ -66,10 +70,10 @@ def train(args):
           "Start training...")
     ResCifarModel.train(maxEpochs=args.ep, batchSize=args.batch,
                         criterion=criterion,
-                        trainData=torch.from_numpy(trainData[:1]).float(),#.to(device),
-                        trainLabel=torch.from_numpy(trainLabel[:1]).long().to(device),
-                        validData=torch.from_numpy(validData[:1]).float(),#.to(device),
-                        validLabel=torch.from_numpy(validLabel[:1]).long().to(device),
+                        trainData=torch.from_numpy(trainData).float(),#.to(device),
+                        trainLabel=torch.from_numpy(trainLabel).long().to(device),
+                        validData=torch.from_numpy(validData).float(),#.to(device),
+                        validLabel=torch.from_numpy(validLabel).long().to(device),
                         writer=tbWriter)
 
     timestamp = int(time.time())
@@ -84,43 +88,5 @@ def train(args):
     ResCifarModel.saveOnnx("res_cifar_{:d}.onnx".format(timestamp))
 
 
-def parseTest(parser: argparse.ArgumentParser):
-    parser.add_argument('--target', dest='target',
-                        type=str, choices=['train', 'test'],
-                        default='train', help='target testing data set')
 
-    parser.set_defaults(func=test)
 
-def test(args):
-    if args.device == 'gpu' and torch.cuda.is_available() is not True:
-        print("cuda not available")
-        exit(1)
-    device = torch.device("cuda:0" if args.device == 'gpu' else "cpu")
-    print("===\n"
-          "Setup device: {d}".format(d=args.device))
-
-    model = jit.load(args.loadDir)
-    model.eval()
-    ResCifarModel = CifarModel(model, device=device, optimizer=None)
-
-    print("===\n"
-          "Loading dataset from {p}...".format(p=args.dataDir))
-    trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
-
-    score = 0
-    if args.target == 'train':
-        score = ResCifarModel.score(data=torch.from_numpy(trainData).float(),
-                            label=torch.from_numpy(trainLabel).long(),
-                            batchSize=128)
-    else:
-        score = ResCifarModel.score(data=torch.from_numpy(testData).float(),
-                            label=torch.from_numpy(testLabel).long(),
-                            batchSize=128)
-    print("===\n"
-          "Score: {:.3f}".format(score))
-
-if __name__ == '__main__':
-    model = jit.load("./res_cifar_1604595636.jit")
-    model.eval()
-    input = torch.ones(1, 3, 32, 32)
-    print(model(input))
