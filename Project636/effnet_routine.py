@@ -33,7 +33,15 @@ def EffNetGridSearch(args):
         thisDev = torch.device(i%torch.cuda.device_count() if device=='gpu' else 'cpu')
         layers = 33-int(33 * depths[i] + 0.5)
         arch = [3, 4, 23, 3]
-        arch[2] -= layers
+        if layers >= 33:
+            print("invalid depth factor, not enough layers to remove")
+            return
+        if layers <= 19:
+            arch[2] -= layers
+        else:
+            arch[2] -= 19
+            for k in range(layers-19):
+                arch[k%4] -= 1
         arch = [str(i) for i in arch]
         cmd = ("python {rt}/main.py --data_dir={data} --device={dev} train "
                   "--firstNumFilters={fil} "
