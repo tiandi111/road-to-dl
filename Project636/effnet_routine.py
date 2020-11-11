@@ -46,7 +46,7 @@ def EffNetGridSearch(args):
         cmd = ("python {rt}/main.py --data_dir={data} --device={dev} train "
                   "--firstNumFilters={fil} "
                   "--ep=150 "
-                  "--lr=0.09 "
+                  "--lr=0.1 "
                   "--wd=1e-4 "
                   "--arch={arc}".format(
             rt=args.rootDir, data=args.dataDir, dev=thisDev, fil=int(widths[i] * args.baseWidth + 0.5), arc=','.join(arch)
