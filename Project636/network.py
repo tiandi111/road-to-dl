@@ -45,7 +45,7 @@ class ResNet(nn.Module):
         self.ResPart = nn.Sequential()
         self.lastOutC = firstNumFilter
         for i in range(len(stackSize)):
-            outC = 4*firstNumFilter * (2**i)
+            outC = 4 * firstNumFilter * (2**i)
             bottC = int(outC / 4)
             for j in range(stackSize[0]):
                 self.ResPart.add_module("stack{i}_{j}".format(i=i, j=j),

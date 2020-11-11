@@ -31,18 +31,17 @@ def EffNetGridSearch(args):
 
     for i in range(len(depths)):
         thisDev = torch.device(i%torch.cuda.device_count() if device=='gpu' else 'cpu')
-        layers = 16-int(16 * depths[i])
-        arch = [3, 4, 6, 3]
-        for j in range(layers):
-            arch[j % 4] -= 1
+        layers = 33-int(33 * depths[i] + 0.5)
+        arch = [3, 4, 23, 3]
+        arch[2] -= layers
         arch = [str(i) for i in arch]
         cmd = ("python {rt}/main.py --data_dir={data} --device={dev} train "
                   "--firstNumFilters={fil} "
                   "--ep=150 "
-                  "--lr=0.1 "
+                  "--lr=0.09 "
                   "--wd=1e-4 "
                   "--arch={arc}".format(
-            rt=args.rootDir, data=args.dataDir, dev=thisDev, fil=int(widths[i] * args.baseWidth), arc=','.join(arch)
+            rt=args.rootDir, data=args.dataDir, dev=thisDev, fil=int(widths[i] * args.baseWidth + 0.5), arc=','.join(arch)
         ))
         subprocess.Popen(cmd, shell=True)
 

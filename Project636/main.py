@@ -1,7 +1,9 @@
 import argparse
+from loader import loadData, localNorm
 from routines import parseTrain
 from test_routine import parseTest
 from effnet_routine import parseEffNet
+
 
 def parse():
     parser = argparse.ArgumentParser(description='Project636 Routines.')
