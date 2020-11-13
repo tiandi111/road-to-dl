@@ -6,11 +6,9 @@
 #define SERVER_UTILS_TEST_H
 
 
-
-class utils_test {
-
+namespace utilsTest {
+    void TestCifarLoaderLoad();
 };
-
 
 
 #endif //SERVER_UTILS_TEST_H

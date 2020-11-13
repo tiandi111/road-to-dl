@@ -36,14 +36,33 @@ namespace eng {
 //        Execute(ictx::InputContext ctx, grp::Graph g);
     };
 
+
+    class DnnlMemCache {
+    private:
+        unordered_map<string, memory> cache;
+    public:
+        bool Exists(const string& key) {
+            return cache.find(key) != cache.end();
+        }
+        void Put(const string& key, const memory& mem) {
+            cache.insert({key, mem});
+        }
+        // must call this function when InMemCache() returns true
+        memory Get(const string& key) {
+            return cache.find(key)->second;
+        }
+    };
+
     class MKLEngine : Engine {
     private:
         std::unordered_map<string, dnnl::primitive> prims;
         dnnl::engine eng;
+        DnnlMemCache memCache;
     public:
         MKLEngine(string name, DeviceType t);
         virtual ~MKLEngine() = default;
         void Execute(ctx::InputContext& ictx, ctx::OutputContext& octx, grp::Graph& g);
+        DnnlMemCache& GetDnnlMemCache() {return memCache;}
     };
 
     // todo: handle shape, gather and others that may not need or not support by mkl prims
@@ -53,19 +72,22 @@ namespace eng {
     //     => we need the control of layout transformation, for joint optimization of graph-level and op-level
     //          make it a node!
     //          at this stage, don't do any layout trans, the first goal is to run the lenet!
+
     class ExecutableNode {
+    private:
     public:
         virtual ~ExecutableNode() = default;
         virtual void Execute() = 0;
         static dnnl::memory FindInputMemUtil (
                 unordered_map<string, dnnl::memory>& inputs,
                 const unordered_map<string, ten::Tensor>& weights,
-                const dnnl::engine eng,
-                string key) {
+                const dnnl::engine& eng,
+                const string& key) {
             auto got = inputs.find(key);
             if( got != inputs.end() ) {
                 return got->second;
-            } // if not in inputs, then must in weight, otherwise will throw exception
+            }
+            // if not in inputs and memCache, then must in weight, otherwise will throw exception
             else {
                 auto got = weights.find(key);
                 if(got == weights.end()) {
@@ -77,6 +99,17 @@ namespace eng {
                          mkl::TensorDtypeToMKLType(tensor.Type()),
                          mkl::ChosseDefaultTag(tensor.Dims().size())}, eng, (void*)tensor.Data().data());
             }
+        }
+        static dnnl::memory FindInputMemUtilWithCache (
+                unordered_map<string, dnnl::memory>& inputs,
+                DnnlMemCache& memCache,
+                const unordered_map<string, ten::Tensor>& weights,
+                const dnnl::engine& eng,
+                const string& key) {
+            if(memCache.Exists(key)) {
+                return memCache.Get(key);
+            }
+            return FindInputMemUtil(inputs, weights, eng, key);
         }
     };
 
@@ -163,7 +196,8 @@ namespace eng {
                 unordered_map<string, dnnl::memory>& inputs,
                 grp::Graph& g,
                 shared_ptr<node::FlattenNode> node,
-                dnnl::engine eng);
+                dnnl::engine eng,
+                dnnl::stream stream);
         // no execution needed
         inline void Execute() override {};
     };
@@ -215,10 +249,11 @@ namespace eng {
     public:
         ExecConvNode(
                 unordered_map<string, dnnl::memory>& inputs,
+                DnnlMemCache& memCache,
                 grp::Graph& g,
                 shared_ptr<node::ConvNode> node,
-                dnnl::engine eng,
-                dnnl::stream stream);
+                dnnl::engine& eng,
+                dnnl::stream& stream);
     };
 
     class ExecBNNode : public ExecNodeMKL {
@@ -284,20 +319,21 @@ namespace eng {
 
     class MKLExecutionContext {
     private:
-        dnnl::stream stream;
-        dnnl::engine eng;
+        dnnl::stream& stream;
+        dnnl::engine& eng;
         unordered_map<string, dnnl::memory>& inputs;
-        vector<std::shared_ptr<eng::ExecutableNode>> execNodes;
         grp::Graph& g;
+        MKLEngine& mklEng;
     public:
         MKLExecutionContext(
-                dnnl::stream stream,
-                dnnl::engine eng,
+                dnnl::stream& stream,
+                dnnl::engine& eng,
                 unordered_map<string, dnnl::memory>& inputs,
-                grp::Graph& g);
+                grp::Graph& g,
+                MKLEngine& mklEng) : inputs(inputs), g(g), eng(eng), stream(stream), mklEng(mklEng) {}
         void Execute();
     private:
-        void InitNode(std::shared_ptr<node::Node> n);
+        void InitNode(const std::shared_ptr<node::Node>& n);
     };
 }
 

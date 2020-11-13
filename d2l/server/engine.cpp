@@ -29,15 +29,18 @@ void eng::MKLEngine::Execute(ctx::InputContext& ictx, ctx::OutputContext& octx, 
     // create memory object for inputs
     for(auto& it : ictx.Inputs()) {
         dnnl::memory::dims dims(it.second.Dims().begin(), it.second.Dims().end());
-        auto inMemory = dnnl::memory({dims, dt::f32, mkl::ChosseDefaultTag(dims.size())}, this->eng); // todo: data type and tag
-        mkl::WriteToDnnlMemory(it.second.Data().data(), inMemory);
+        auto inMemory = dnnl::memory(
+                {dims, dt::f32, mkl::ChosseDefaultTag(dims.size())},
+                this->eng,
+                it.second.GetDataHandle()); // todo: data type and tag
         inputs.insert({it.first, inMemory});
     }
     auto execCtx = MKLExecutionContext(
             stream,
-            this->eng,
+            eng,
             inputs,
-            g);
+            g,
+            *this);
     execCtx.Execute();
     for(auto& ot : octx.Outputs()) {
         auto got = inputs.find(ot.first);
@@ -48,99 +51,89 @@ void eng::MKLEngine::Execute(ctx::InputContext& ictx, ctx::OutputContext& octx, 
     }
 }
 
-eng::MKLExecutionContext::MKLExecutionContext(
-        dnnl::stream stream,
-        dnnl::engine eng,
-        unordered_map<string, dnnl::memory>& inputs,
-        grp::Graph& g) : inputs(inputs), stream(stream), eng(eng), g(g) {
-}
-
 void eng::MKLExecutionContext::Execute() {
-    auto& nodes = this->g.GetNodes();
-    for(auto node : nodes) {
+    auto& nodes = g.GetNodes();
+    for(auto& node : nodes) {
         InitNode(node);
-    }
-    for(auto x : this->execNodes) {
-        x->Execute();
     }
     this->stream.wait();
 }
 
-void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
+void eng::MKLExecutionContext::InitNode(const std::shared_ptr<node::Node>& n) {
     switch(n->Type()) {
         case node::OpType::conv : {
             std::shared_ptr<node::ConvNode> node = std::dynamic_pointer_cast<node::ConvNode>(n);
             if(node->KernelShape().size() != 2) {
                 throw runtime_error(to_string(node->KernelShape().size()-2) + "d convolution is not supported now");
             }
-            ExecConvNode execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecConvNode>(execNode));
+            ExecConvNode execNode(inputs, mklEng.GetDnnlMemCache(), g, node, eng, stream);
+            execNode.Execute();
             break;
         }
         case node::OpType::bn : {
             std::shared_ptr<node::BatchNormNode> node = std::dynamic_pointer_cast<node::BatchNormNode>(n);
             ExecBNNode execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecBNNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::shape : {
             std::shared_ptr<node::ShapeNode> node = std::dynamic_pointer_cast<node::ShapeNode>(n);
             ExecShapeNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecShapeNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::gather : {
             std::shared_ptr<node::GatherNode> node = std::dynamic_pointer_cast<node::GatherNode>(n);
             ExecGatherNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecGatherNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::mul : {
             std::shared_ptr<node::MulNode> node = std::dynamic_pointer_cast<node::MulNode>(n);
             ExecMulNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecMulNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::unsqueeze : {
             std::shared_ptr<node::UnsqueezeNode> node = std::dynamic_pointer_cast<node::UnsqueezeNode>(n);
             ExecUnsqueezeNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecUnsqueezeNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::concat : {
             std::shared_ptr<node::ConcatNode> node = std::dynamic_pointer_cast<node::ConcatNode>(n);
             ExecConcatNode execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecConcatNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::reshape : {
             std::shared_ptr<node::ReshapeNode> node = std::dynamic_pointer_cast<node::ReshapeNode>(n);
             ExecReshapeNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecReshapeNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::flatten : {
             std::shared_ptr<node::FlattenNode> node = std::dynamic_pointer_cast<node::FlattenNode>(n);
-            ExecFlattenNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecFlattenNode>(execNode));
+            ExecFlattenNode execNode(inputs, g, node, eng, stream);
+            execNode.Execute();
             break;
         }
         case node::OpType::constant : {
             std::shared_ptr<node::ConstantNode> node = std::dynamic_pointer_cast<node::ConstantNode>(n);
             ExecConstantNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecConstantNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::gemm : {
             std::shared_ptr<node::GemmNode> node = std::dynamic_pointer_cast<node::GemmNode>(n);
             ExecGemmNode execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecGemmNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::pad : {
             std::shared_ptr<node::PadNode> node = std::dynamic_pointer_cast<node::PadNode>(n);
             ExecPadNode execNode(inputs, g, node, eng);
-            execNodes.push_back(std::make_shared<ExecPadNode>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::avgpool : {
@@ -149,60 +142,47 @@ void eng::MKLExecutionContext::InitNode(std::shared_ptr<node::Node> n) {
                 throw runtime_error(to_string(node->KernelShape().size()-2) + "d pooling is not supported now");
             }
             ExecAvgPoolingNode2D execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecAvgPoolingNode2D>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::gavgpool : {
             std::shared_ptr<node::GlobalAvgPoolingNode> node = std::dynamic_pointer_cast<node::GlobalAvgPoolingNode>(n);
             ExecGlobalAvgPoolingNode2D execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecGlobalAvgPoolingNode2D>(execNode));
+            execNode.Execute();
             break;
         }
         case node::OpType::add : {
             std::shared_ptr<node::AddNode> node = std::dynamic_pointer_cast<node::AddNode>(n);
             ExecAddNode execNode(inputs, g, node, eng, stream);
-            execNodes.push_back(std::make_shared<ExecAddNode>(execNode));
+            execNode.Execute();
             break;
         }
         default:
             throw std::runtime_error("invalid op type" + to_string(n->Type()));
-            return;
     }
 }
 
 eng::ExecConvNode::ExecConvNode(
         unordered_map<string, dnnl::memory>& inputs,
+        DnnlMemCache& memCache,
         grp::Graph& g,
         shared_ptr<node::ConvNode> node,
-        dnnl::engine eng,
-        dnnl::stream stream
-        ) : ExecNodeMKL(stream){
-    // get weight info
-    dnnl::memory::dims wDims(node->WeightDims().begin(), node->WeightDims().end());
-    // notice that the tag should be compatible with actual dims
-    auto wMemory  = dnnl::memory({wDims, dt::f32, tag::nchw}, eng);
-    mkl::WriteToDnnlMemory(g.GetWeightHandle(node->WeightName()), wMemory);
-    // get bias info
-    dnnl::memory::dims bDims(node->BiasDims().begin(), node->BiasDims().end());
-    auto bMemory  = dnnl::memory({bDims, dt::f32, tag::x}, eng);
-    mkl::WriteToDnnlMemory(g.GetWeightHandle(node->BiasName()), bMemory);
-    // get src info
-    auto srcMemory = FindInputMemUtil(inputs, g.GetWeights(), eng, node->SrcInputName());
-    auto srcDims = srcMemory.get_desc().dims();
+        dnnl::engine& eng,
+        dnnl::stream& stream) : ExecNodeMKL(stream){
+    auto wMemory = FindInputMemUtilWithCache(inputs, memCache, g.GetWeights(), eng, node->WeightName());
+    auto bMemory = FindInputMemUtilWithCache(inputs, memCache, g.GetWeights(), eng, node->BiasName());
+    auto srcMemory = FindInputMemUtilWithCache(inputs,  memCache, g.GetWeights(), eng, node->SrcInputName());
 
+    auto srcDims = srcMemory.get_desc().dims();
+    memory::dims wDims(node->WeightDims().begin(), node->WeightDims().end());
+    memory::dims bDims(node->BiasDims().begin(), node->BiasDims().end());
     auto dstDims = utils::ComputeConvOutputDims(
             srcDims[0], srcDims[2], srcDims[3], node->KernelShape()[0], node->KernelShape()[1],
             node->Pads()[0], node->Pads()[1], node->Pads()[2], node->Pads()[3], node->Strides()[0], node->Strides()[1],
             node->WeightDims()[0]);
-    auto dstMemory = dnnl::memory({dstDims, dt::f32, tag::nchw}, eng); // todo: data type
+    auto dstMemory = dnnl::memory({dstDims, dt::f32, tag::nchw}, eng);
     // todo: if bias not exist?
-    vector<int> vDstDims(dstDims.begin(), dstDims.end());
 
-    memory::dims src_dims(srcDims.begin(), srcDims.end());
-    memory::dims weights_dims(wDims.begin(), wDims.end());
-    memory::dims bias_dims(bDims.begin(), bDims.end());
-    memory::dims dst_dims(dstDims.begin(), dstDims.end());
-    // Strides, padding dimensions.
     memory::dims strides_dims(node->Strides().begin(), node->Strides().end());
     auto pads = node->Pads();
     memory::dims paddingDimsLeft(pads.begin(), pads.begin()+pads.size()/2);
@@ -211,58 +191,52 @@ eng::ExecConvNode::ExecConvNode(
     // enables the convolution primitive to choose memory layouts for an
     // optimized primitive implementation, and these layouts may differ from the
     // ones provided by the user.
-    auto conv_src_md = memory::desc(src_dims, dt::f32, tag::nchw);
-    auto conv_weights_md = memory::desc(weights_dims, dt::f32, tag::nchw);
-    auto conv_dst_md = memory::desc(dst_dims, dt::f32, tag::nchw);
+    auto convSrcMd = memory::desc(srcDims, dt::f32, tag::any);
+    auto convWeightsMd = memory::desc(wDims, dt::f32, tag::any);
+    auto convDstMd = memory::desc(dstDims, dt::f32, tag::any);
     // Create memory descriptor and memory object for input bias.
-    auto user_bias_md = memory::desc(bias_dims, dt::f32, tag::a);
+    auto userBiasMd = memory::desc(bDims, dt::f32, tag::a);
     // Create operation descriptor.
-    auto conv_desc = convolution_forward::desc(prop_kind::forward_training,
-                                               algorithm::convolution_direct, conv_src_md, conv_weights_md,
-                                               user_bias_md, conv_dst_md, strides_dims, paddingDimsLeft,
+    auto convDesc = convolution_forward::desc(prop_kind::forward_inference,
+                                               algorithm::convolution_direct, convSrcMd, convWeightsMd,
+                                               userBiasMd, convDstMd, strides_dims, paddingDimsLeft,
                                                paddingDimsRight);
 
     // set post-relu
+    post_ops postOps;
     primitive_attr convAttr;
     if(node->PostRelu()) {
-        post_ops postOps;
-        postOps.append_eltwise(1, algorithm::eltwise_relu, 0, 0);
-        convAttr.set_post_ops(postOps);
+        postOps.append_eltwise(1.f, algorithm::eltwise_relu, 0, 0);
     }
+    if(node->PostSum()) {
+        postOps.append_sum(1.f, srcMemory.get_desc().data_type());
+        dstMemory = FindInputMemUtil(inputs, g.GetWeights(), eng, node->PostSumOutputName());
+    }
+    convAttr.set_post_ops(postOps);
 
     // Create primitive descriptor.
-    auto conv_pd = convolution_forward::primitive_desc(conv_desc, convAttr, eng);
+    auto convPrimDesc = convolution_forward::primitive_desc(convDesc, convAttr, eng);
     // Create the primitive.
     // In case dnnl creates a different format from the user defined one, we need to reorder them
-    auto convSrcMem = srcMemory;
-    auto convWeightsMem = wMemory;
-    auto convDstMem = dstMemory;
-    // reorder source memory
-    if (conv_pd.src_desc() != srcMemory.get_desc()) {
-        convSrcMem = memory(conv_pd.src_desc(), eng);
-        reorder(srcMemory, convSrcMem)
-                .execute(stream, srcMemory, convSrcMem);
-
-    }
-    // reorder weight memory
-    if (conv_pd.weights_desc() != wMemory.get_desc()) {
-        convWeightsMem = memory(conv_pd.weights_desc(), eng);
-        reorder(wMemory, convWeightsMem)
-                .execute(stream, wMemory, convWeightsMem);
-    }
-    // reorder destination memory
-    if (conv_pd.dst_desc() != dstMemory.get_desc()) {
-        convDstMem = memory(conv_pd.dst_desc(), eng);
+    auto convSrcMem = mkl::PossibleReorder(srcMemory, convPrimDesc.src_desc(), stream, eng, to_string(node->ID()) + "_src_" + node->SrcInputName());
+    auto convWeightsMem = mkl::PossibleReorder(wMemory, convPrimDesc.weights_desc(), stream, eng, to_string(node->ID()) + "_wei_" + node->WeightName());
+//    dstMemory = mkl::PossibleReorder(dstMemory, convPrimDesc.dst_desc(), stream, eng, to_string(node->ID()) + "_dst_" + node->OutputName());
+    if(!node->PostSum()) {
+        dstMemory = dnnl::memory(convPrimDesc.dst_desc(), eng);
     }
 
-    prim = convolution_forward(conv_pd);
+    if(!memCache.Exists(node->WeightName())) {
+        memCache.Put(node->WeightName(), convWeightsMem);
+    }
+
+    prim = convolution_forward(convPrimDesc);
     args.insert({
             {DNNL_ARG_SRC, convSrcMem},
             {DNNL_ARG_WEIGHTS, convWeightsMem},
             {DNNL_ARG_BIAS, bMemory},
-            {DNNL_ARG_DST, convDstMem}
+            {DNNL_ARG_DST, dstMemory}
     });
-    inputs.insert({node->Outputs()[0], convDstMem});
+    inputs.insert({node->Outputs()[0], dstMemory});
 }
 
 eng::ExecBNNode::ExecBNNode(
@@ -273,7 +247,6 @@ eng::ExecBNNode::ExecBNNode(
         dnnl::stream stream) : ExecNodeMKL(stream) {
     // retrieve srouce memory
     auto srcMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->SrcInputName());
-    auto dstMem = dnnl::memory({srcMem.get_desc().dims(), dt::f32, tag::nchw}, eng);
     // scale and shift memory
     auto scaleShiftMd = memory::desc({2, node->Dim()[0]}, dt::f32, tag::nc);
     auto scaleShiftMem = memory(scaleShiftMd, eng);
@@ -282,30 +255,36 @@ eng::ExecBNNode::ExecBNNode(
             0, 0, scaleShiftSize/2);
     mkl::WriteToDnnlMemoryFromTo(g.GetWeightHandle(node->BiasName()), scaleShiftMem,
             0, scaleShiftSize/2, scaleShiftSize/2);
-    // Create operation descriptor.
-    auto bnormDesc = batch_normalization_forward::desc(
-            prop_kind::forward_inference, srcMem.get_desc(), node->Epsilon(),
-                normalization_flags::use_scale_shift
-                | normalization_flags::use_global_stats);
     // set post-relu
     primitive_attr bnormAttr;
+    normalization_flags flags = normalization_flags::use_scale_shift | normalization_flags::use_global_stats;
     if(node->PostRelu()) {
         post_ops postOps;
         postOps.append_eltwise(1, algorithm::eltwise_relu, 0, 0);
         bnormAttr.set_post_ops(postOps);
+        flags |= normalization_flags::fuse_norm_relu;
     }
+    // Create operation descriptor.
+    auto bnormDesc = batch_normalization_forward::desc(
+            prop_kind::forward_inference, srcMem.get_desc(), node->Epsilon(), flags);
     // Create primitive descriptor.
-    auto bnormPD = batch_normalization_forward::primitive_desc(bnormDesc, bnormAttr, eng);
+    auto bnormPrimDesc = batch_normalization_forward::primitive_desc(bnormDesc, bnormAttr, eng);
+    auto dstMem = dnnl::memory(bnormPrimDesc.dst_desc(), eng);
     // Create memory objects using memory descriptors created by the primitive
     // descriptor: mean, variance, workspace.
     // NOTE: Here, the ReLU post-ops require a workspace for later usage in
     // backward propagation mode.
-    auto meanMem = memory(bnormPD.mean_desc(), eng);
-    mkl::WriteToDnnlMemory(g.GetWeightHandle(node->MeanName()), meanMem);
-    auto varianceMem = memory(bnormPD.variance_desc(), eng);
-    mkl::WriteToDnnlMemory(g.GetWeightHandle(node->VarName()), varianceMem);
+    auto meanMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->MeanName());
+    auto varianceMem = FindInputMemUtil(inputs, g.GetWeights(), eng, node->VarName());
     // Create the primitive.
-    prim = batch_normalization_forward(bnormPD);
+    prim = batch_normalization_forward(bnormPrimDesc);
+    // possible reorder
+//    auto BnSrcMem = mkl::PossibleReorder(srcMem, bnormPrimDesc.src_desc(), stream, eng);
+//    auto BnMeanMem = mkl::PossibleReorder(meanMem, bnormPrimDesc.mean_desc(), stream, eng);
+//    auto BnVarMem = mkl::PossibleReorder(varianceMem, bnormPrimDesc.variance_desc(), stream, eng);
+    auto BnSrcMem = srcMem;
+    auto BnMeanMem = meanMem;
+    auto BnVarMem = varianceMem;
     // todo under some cases, we can not do in-place bn, so uncomment below line
     //    inputs.insert({node->Outputs()[0], dstMem});
     //      e.g, in -> BN ->+-> out
@@ -313,9 +292,9 @@ eng::ExecBNNode::ExecBNNode(
     //            |          |
     //            ·----------·
     args = {
-            {DNNL_ARG_SRC, srcMem},
-            {DNNL_ARG_MEAN, meanMem},
-            {DNNL_ARG_VARIANCE, varianceMem},
+            {DNNL_ARG_SRC, BnSrcMem},
+            {DNNL_ARG_MEAN, BnMeanMem},
+            {DNNL_ARG_VARIANCE, BnVarMem},
             {DNNL_ARG_SCALE_SHIFT, scaleShiftMem},
             {DNNL_ARG_DST, dstMem}
     };
@@ -488,9 +467,10 @@ eng::ExecFlattenNode::ExecFlattenNode(
         unordered_map<string, dnnl::memory>& inputs,
         grp::Graph& g,
         shared_ptr<node::FlattenNode> node,
-        dnnl::engine eng) {
-    auto data = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputsName());
-    auto dims = data.get_desc().dims();
+        dnnl::engine eng,
+        dnnl::stream stream) {
+    auto srcMemory = FindInputMemUtil(inputs, g.GetWeights(), eng, node->InputsName());
+    auto dims = srcMemory.get_desc().dims();
     int d1 = 1, d2 = 1;
     for(int i=0; i<node->Axis(); i++) {
         d1 *= dims[i];
@@ -499,7 +479,13 @@ eng::ExecFlattenNode::ExecFlattenNode(
         d2 *= dims[i];
     }
     dnnl::memory::dims newDims({d1, d2});
-    dst = dnnl::memory({newDims, data.get_desc().data_type(), tag::ab}, eng, data.get_data_handle());
+    dnnl::memory::dims oldDims = srcMemory.get_desc().dims();
+    dst = mkl::PossibleReorder(srcMemory,
+            {oldDims, srcMemory.get_desc().data_type(), mkl::ChosseDefaultTag(oldDims.size())},
+            stream,
+            eng,
+            to_string(node->ID()) + node->InputsName());
+    dst = memory(dst.get_desc().reshape(newDims), eng, dst.get_data_handle());
     inputs.insert({node->OutputName(), dst});
 }
 
@@ -564,7 +550,6 @@ eng::ExecGemmNode::ExecGemmNode(
         srcMem = dnnl::memory(desc, eng, srcMem.get_data_handle());
     }
     if(node->TransB()) {
-        auto ddd = weightMem.get_desc();
         auto desc = weightMem.get_desc().permute_axes({1, 0});
         weightMem = dnnl::memory(desc, eng, weightMem.get_data_handle());
     }
@@ -577,7 +562,7 @@ eng::ExecGemmNode::ExecGemmNode(
     }
 
     auto biasDim = biasMem.get_desc().dims();
-    if(biasDim.size() > 2 || biasDim.size() < 1) {
+    if(biasDim.size() > 2 || biasDim.empty()) {
         throw std::runtime_error("invalid bias dims");
     }
     // broadcast bias dims
@@ -589,7 +574,7 @@ eng::ExecGemmNode::ExecGemmNode(
         }
     }
 
-    dnnl::memory dstMem({{srcDim[0], weightDim[1]}, srcMem.get_desc().data_type(),tag::ab}, eng);
+    memory dstMem({{srcDim[0], weightDim[1]}, srcMem.get_desc().data_type(),tag::ab}, eng);
 
     primitive_attr attr;
     if(node->Bias()) {
@@ -597,10 +582,11 @@ eng::ExecGemmNode::ExecGemmNode(
         matmul::primitive_desc primDesc(desc, attr, eng);
         prim = matmul(primDesc);
     } else {
-        matmul::desc desc(srcMem.get_desc(), weightMem.get_desc(), biasMem.get_desc(), dstMem.get_desc());
+        matmul::desc desc(srcMem.get_desc(), weightMem.get_desc(), dstMem.get_desc());
         matmul::primitive_desc primDesc(desc, attr, eng);
         prim = matmul(primDesc);
     }
+
 
     args.insert({DNNL_ARG_SRC, srcMem});
     args.insert({DNNL_ARG_WEIGHTS, weightMem});

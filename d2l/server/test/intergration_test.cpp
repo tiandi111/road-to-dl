@@ -12,8 +12,7 @@
 #include <fstream>
 
 void interTest::TestInference() {
-//    ifstream in("/Users/tiandi03/road-to-dl/d2l/server/test/models/export.onnx", ios_base::binary);
-    ifstream in("/Users/tiandi03/road-to-dl/d2l/server/test/models/simple_resnet.onnx", ios_base::binary);
+    ifstream in("/Users/tiandi03/road-to-dl/d2l/server/test/models/resnet10.onnx", ios_base::binary);
     auto g = load::LoadOnnx(&in);
     g.Fuse();
 //    for(auto node : g.GetNodes()) {
@@ -25,7 +24,7 @@ void interTest::TestInference() {
     vector<int64_t> dims = {1, 3, 32, 32};
     ten::Tensor src(dims, ten::f32, (char*)data.data(), 12288);
     ctx::InputContext inCtx({{"input.1", src}});
-    string outputName = "42";
+    string outputName = "140";
     ctx::OutputContext ouCtx({{outputName, ten::Tensor({1, 10}, ten::f32)}});
 
     mklEngine.Execute(inCtx,ouCtx, g);

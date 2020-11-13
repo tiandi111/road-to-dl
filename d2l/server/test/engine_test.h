@@ -11,7 +11,6 @@ namespace engineTest {
     void TestAddNode();
     void TestGlobalAvgPoolingNode2D();
     void TestConvBNNode();
-    void TestConvBNReluGemmNode();
 }
 
 #endif //SERVER_ENGINE_TEST_H

@@ -32,6 +32,10 @@ namespace grp {
         // key: the input name
         // value: a vector of nodes that depends on the input
         unordered_map<string, vector<std::shared_ptr<node::Node>>> inputDepends;
+        // returns the node whose output is the key
+        // key: one of the outputs' name
+        // value: the node
+        unordered_map<string, std::shared_ptr<node::Node>> outputSrcNode;
     public:
         Graph() = default;
         Graph(map<string, vector<int>> inDims,
@@ -44,6 +48,19 @@ namespace grp {
         unordered_map<string, ten::Tensor>& GetMutableWeights();
         inline void AddWeight(const string& k, const ten::Tensor& w) {
             this->weights.insert({k, w});
+        }
+        const unordered_map<string, vector<std::shared_ptr<node::Node>>>& GetDependRelations() {
+            return inputDepends;
+        }
+        const unordered_map<string, std::shared_ptr<node::Node>>& GetOutputSrcNode() {
+            return outputSrcNode;
+        }
+        const std::shared_ptr<node::Node> GetNodeByOutputName(const string& outputName) {
+            auto got = outputSrcNode.find(outputName);
+            if(got != outputSrcNode.end()) {
+                return got->second;
+            }
+            return nullptr;
         }
         const void * GetWeightHandle(string name) const;
         const ten::Tensor& GetWeightTensor(string name) const;

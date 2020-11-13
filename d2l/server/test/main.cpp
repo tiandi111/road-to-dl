@@ -6,6 +6,7 @@
 #include "engine_test.h"
 #include "tensor_test.h"
 #include "intergration_test.h"
+#include "utils_test.h"
 
 int main() {
 //    utilTest::TestGather();
@@ -19,10 +20,12 @@ int main() {
 //    engineTest::TestAddNode();
 //    engineTest::TestGlobalAvgPoolingNode2D();
 //    engineTest::TestConvBNNode();
-//    engineTest::TestConvBNReluGemmNode();
 
 //    tensorTest::TestTensor();
 //    tensorTest::TestWrite();
+    tensorTest::TestGlobalNormalization();
 
-    interTest::TestInference();
+//    interTest::TestInference();
+
+//    utilsTest::TestCifarLoaderLoad();
 }

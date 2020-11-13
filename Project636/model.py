@@ -115,7 +115,7 @@ class CifarModel():
         )
 
     def loadCheckpoint(self, path: str, training: bool):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=self.device)
         self.Model.load_state_dict(checkpoint['model_state_dict'])
         # self.Optim.load_state_dict(checkpoint['optimizer_state_dict'])
         self.LossHist = checkpoint['loss']

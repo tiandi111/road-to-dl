@@ -142,35 +142,3 @@ void engineTest::TestConvBNNode() {
 //        AssertEqual(out, expected[i], "TestConvBNNode, case1, wrong output");
     }
 }
-
-void engineTest::TestConvBNReluGemmNode() {
-    ifstream in("/Users/tiandi03/road-to-dl/d2l/server/test/models/1604607335.onnx", ios_base::binary);
-    auto g = load::LoadOnnx(&in);
-    g.Fuse();
-    eng::MKLEngine mklEngine("cpu", eng::DeviceType::cpu);
-
-    vector<float> data(27, 1);
-    vector<int64_t> dims = {1, 3, 3, 3};
-    ten::Tensor src(dims, ten::f32, (char*)data.data(), 108);
-
-    ctx::InputContext inCtx({{"input.1", src}});
-    ctx::OutputContext ouCtx({{"14", ten::Tensor({1, 5}, ten::f32)}});
-
-    mklEngine.Execute(inCtx,ouCtx, g);
-
-    float expected[27] = {
-            0.0874754,
-            -0.149944,
-            -0.0630697,
-            0.0280578,
-            0.023991,
-    };
-
-    auto got = ouCtx.Outputs().find("14");
-    AssertFalse(got==ouCtx.Outputs().end(), "TestConvBNReluGemmNode, case1, not exist");
-    for(int i=0; i<5; i++) {
-        float out = *((float*)got->second.Data().data() + i);
-        cout<< out<< endl;
-//        AssertEqual(out, float(1), "TestConvBNReluGemmNode, case1, wrong output");
-    }
-}

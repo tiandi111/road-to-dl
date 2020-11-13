@@ -3,6 +3,7 @@ import argparse
 import torch.jit as jit
 from model import CifarModel
 from loader import loadData
+import time
 
 
 def parseTest(parser: argparse.ArgumentParser):
@@ -30,6 +31,7 @@ def test(args):
     trainData, trainLabel, testData, testLabel = loadData(args.dataDir)
 
     score = 0
+    st = time.time()
     if args.target == 'train':
         score = ResCifarModel.score(data=torch.from_numpy(trainData).float(),
                             label=torch.from_numpy(trainLabel).long(),
@@ -39,4 +41,5 @@ def test(args):
                             label=torch.from_numpy(testLabel).long(),
                             batchSize=128)
     print("===\n"
-          "Score: {:.3f}".format(score))
+          "Score: {:.3f}\n"
+          "Time: {:.3f}".format(score, time.time()-st))

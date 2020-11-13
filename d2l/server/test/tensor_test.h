@@ -9,6 +9,7 @@
 namespace tensorTest {
     void TestTensor();
     void TestWrite();
+    void TestGlobalNormalization();
 }
 
 

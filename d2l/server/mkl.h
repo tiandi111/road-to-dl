@@ -32,6 +32,12 @@ namespace mkl {
     // input: the length of the dimensions
     tag ChosseDefaultTag(int dimLen);
 
+    memory PossibleReorder(memory& srcMemory,
+            const memory::desc& targetDesc,
+            const stream& stream,
+            const engine& eng,
+            const string& msg);
+
     inline void ReadFromDnnlMemory(const void *handle, const dnnl::memory &mem) {
         dnnl::engine eng = mem.get_engine();
         size_t bytes = mem.get_desc().get_size();

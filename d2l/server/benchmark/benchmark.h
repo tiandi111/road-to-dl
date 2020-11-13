@@ -5,4 +5,9 @@
 #ifndef SERVER_BENCHMARK_H
 #define SERVER_BENCHMARK_H
 
+namespace bench {
+    void CifarResNetInfer();
+    void TorchCifarResNetInfer();
+}
+
 #endif //SERVER_BENCHMARK_H

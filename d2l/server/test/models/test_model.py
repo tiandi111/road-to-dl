@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
+import onnx
 import torchvision
 import time
 import torch.nn.functional as F
+import caffe2.python.onnx.backend
+from caffe2.python import core, workspace
 
 
 class TestModel(nn.Module):
@@ -35,13 +38,9 @@ class TestModel(nn.Module):
 
 if __name__ == '__main__':
     model = TestModel()
-
     dummy_input = torch.ones(1, 3, 32, 32)
-
     model.eval()
-
     print(model.forward(dummy_input))
-
     torch.onnx.export(model,
                       dummy_input,
                       "/Users/tiandi03/road-to-dl/d2l/server/test/models/{:d}.onnx".format(int(time.time())),

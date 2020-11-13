@@ -5,6 +5,7 @@
 #include "node.h"
 #include "graph.h"
 #include <vector>
+#include "math.h"
 #include <iostream>
 
 using namespace std;
@@ -71,30 +72,30 @@ const string node::ConvNode::OutputName() const {
 }
 bool node::ConvNode::Absorb(std::shared_ptr<Node> another) {
     // todo: different data type
-    if( !this->relu && another->Type() == node::bn) {
+    if( !relu && another->Type() == node::bn) {
         std::shared_ptr<node::BatchNormNode> bnNode = std::dynamic_pointer_cast<node::BatchNormNode>(another);
-        auto weights = this->GetGraph().GetMutableWeights();
-        auto & convWeight = weights[this->WeightName()];
-        auto & convBias = weights[this->BiasName()];
+        auto & weights = GetGraph().GetMutableWeights();
+        auto & convWeight = weights[weightName];
+        auto & convBias = weights[biasName];
         auto & mean = weights[bnNode->MeanName()];
         auto & var = weights[bnNode->VarName()];
         auto & bnWeight = weights[bnNode->WightName()];
         auto & bnBias = weights[bnNode->BiasName()];
 
-        size_t OC = var.Data().size() >> 2;
-        float * bvar = (float *) var.Data().data();
+        size_t OC = var.Data().size() / sizeof(float);
         float * wei  = (float *) bnWeight.Data().data();
         float * bias  = (float *) bnBias.Data().data();
+        float * bvar = (float *) var.Data().data();
         float * bmean = (float *) mean.Data().data();
         float scalar[OC];
         float shifter[OC];
         for(int i=0; i<OC; i++) {
-            scalar[i] = wei[i] / bvar[i];
-            shifter[i] = bias[i] - bmean[i] / bvar[i];
+            scalar[i] = wei[i] / sqrt(bvar[i]);
+            shifter[i] = bias[i] - scalar[i] * bmean[i];
         }
 
         // scale weight
-        size_t perOCSize = (convWeight.Data().size() >> 2) / OC;
+        size_t perOCSize = (convWeight.Data().size() / sizeof(float)) / OC;
         float * cw = (float *) convWeight.Data().data();
         for(size_t i=0; i<OC; i++) {
             size_t from = i * perOCSize;
@@ -111,13 +112,38 @@ bool node::ConvNode::Absorb(std::shared_ptr<Node> another) {
         }
 
         vector<string> newOutputs = {another->Outputs()[0]};
-        this->setOutputs(newOutputs);
+        setOutputs(newOutputs);
         return true;
     }
     if(another->Type() == node::relu) {
-        this->EnablePostRelu();
-        this->setOutputs(another->Outputs());
+        EnablePostRelu();
+        setOutputs(another->Outputs());
         return true;
+    }
+    if(!PostSum() && (another->Type() == node::add)) {
+        for(const auto& in : another->Inputs()) {
+            if(in != OutputName()) {
+                auto anotherOperandNode = GetGraph().GetNodeByOutputName(in);
+                if(!anotherOperandNode) throw runtime_error("add node only has 1 operand");
+                // Only the toplogically later node can absorb 'ADD' node
+                if(ID() <= anotherOperandNode->ID()) {
+                    return false;
+                } else {
+                    auto allSuccNode = GetGraph().GetDependRelations().find(in);
+                    if(allSuccNode == GetGraph().GetDependRelations().end()) throw runtime_error("graph info is corrupted");
+                    for(auto& succNode : allSuccNode->second) {
+                        // if any successor node of the anotherOperandNode is toplogically later than this node
+                        // we cannot absorb 'ADD' node
+                        if((succNode->ID() != another->ID()) && (succNode->ID() > ID())) {
+                            return false;
+                        }
+                    }
+                    EnablePostSum(in);
+                    setOutputs(another->Outputs());
+                    return true;
+                }
+            }
+        }
     }
     return false;
 }
@@ -180,8 +206,8 @@ bool node::BatchNormNode::Absorb(std::shared_ptr<Node> another) {
     // remember, if this has post-relu, it cannot absorb another bn or conv
     // also, note the difference of bn absorb conv and conv absorb bn
     if(another->Type() == node::relu) {
-        this->EnablePostRelu();
-        this->setOutputs(vector<string>(another->Outputs()));
+        EnablePostRelu();
+        setOutputs(vector<string>(another->Outputs()));
         return true;
     }
     return false;

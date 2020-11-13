@@ -25,3 +25,13 @@ void tensorTest::TestWrite() {
         AssertEqual(e, float(1), "TestWrite, case 1");
     }
 }
+
+void tensorTest::TestGlobalNormalization() {
+    auto ten = ten::Tensor({1, 10}, ten::f32);
+    vector<float> x(10, 1);
+    ten.Write(x.data());
+    ten.GlobalNormalization();
+    for(int i=0; i<10; i++) {
+        assert(*((float*)ten.Data().data()[i]) == 0);
+    }
+}

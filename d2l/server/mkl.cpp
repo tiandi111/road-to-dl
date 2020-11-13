@@ -3,6 +3,7 @@
 //
 
 #include "mkl.h"
+#include <iostream>
 
 primitive mkl::CnnPrimitive(
         const engine& eng,
@@ -78,4 +79,19 @@ tag mkl::ChosseDefaultTag(int dimLen) {
         default:
             throw std::runtime_error("data dimension higher than 6 is not supported now");
     }
+}
+
+memory mkl::PossibleReorder(memory& srcMemory,
+        const memory::desc& targetDesc,
+        const stream& stream,
+        const engine& eng,
+        const string& msg) {
+    if(srcMemory.get_desc() != targetDesc) {
+        auto newMem = memory(targetDesc, eng);
+        reorder(srcMemory, newMem)
+                .execute(stream, srcMemory, newMem);
+//        cout<< "reorder " + msg <<endl;
+        return newMem;
+    }
+    return srcMemory;
 }

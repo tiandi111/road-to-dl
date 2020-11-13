@@ -15,6 +15,7 @@ namespace ten {
         f32,
         i64,
         i8,
+        ui8
     };
 
     class Tensor {
@@ -39,6 +40,11 @@ namespace ten {
         const vector<char>& Data() const;
         const DataType Type() const;
         const vector<int64_t>& Dims() const;
+        void* GetDataHandle() { return data.data(); }
+        uint64_t ArgMax1D();
+        void GlobalNormalization();
+        inline vector<char>& MutableData() { return data; }
+        uint64_t Len();
         // todo: finish this element wise multiplcation
 //        void Multiply(Tensor& A, vector<int>& Axes, bool InPlace);
     };

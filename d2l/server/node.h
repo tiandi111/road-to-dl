@@ -60,8 +60,8 @@ namespace node {
         virtual bool Absorb(Node another);
 
     protected:
-        inline void setOutputs(vector<string> outputs) {
-            this->outputs = outputs;
+        inline void setOutputs(vector<string> newOutputs) {
+            outputs = newOutputs;
         }
     };
 
@@ -78,6 +78,7 @@ namespace node {
         string weightName;
         string biasName;
         bool relu;
+        string sumName;
     public:
         virtual ~ConvNode() = default;
         ConvNode(
@@ -107,7 +108,10 @@ namespace node {
         const string OutputName() const;
         virtual bool Absorb(std::shared_ptr<Node> another);
         void EnablePostRelu();
-        inline const bool PostRelu() const {return this->relu;}
+        inline void EnablePostSum(const string& outputName) {sumName = outputName;}
+        inline const bool PostRelu() const {return relu;}
+        inline const bool PostSum() const {return !sumName.empty();}
+        inline const string PostSumOutputName() {return sumName;}
     };
 
     class BatchNormNode : public Node {
